@@ -1,0 +1,6 @@
+# Everything here is UTF-8 text written with LF; never let checkout flip it.
+* text=auto eol=lf
+
+# Binary assets keep their bytes.
+*.jar binary
+*.png binary
