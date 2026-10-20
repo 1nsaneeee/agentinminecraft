@@ -114,6 +114,34 @@
 | 战斗 | 正常伤害计算，会掉血 |
 | 换皮肤 | `skinFile` 指向一张 64×64 png |
 
+## 换皮肤
+
+**mod 不自带皮肤。** 所以第一次生成的身体是默认皮肤（Steve / Alex）——那不是 bug，是还没给它穿衣服。
+
+三步换掉：
+
+1. 把一张 **64×64 的皮肤 png** 放到游戏目录，例如 `config/mcagent/skin.png`
+2. 在 `config/agentinminecraft.json` 里指向它（或游戏内直接改）：
+
+```
+/agent config set skinFile config/mcagent/skin.png
+```
+
+3. 重新生成身体（`mc_player_despawn` + `mc_player_spawn`），皮肤在玩家创建时套用
+
+相关字段：
+
+| 字段 | 说明 |
+|---|---|
+| `skinFile` | 皮肤文件，相对路径按游戏目录解析 |
+| `skinPlayer` | 套皮肤的玩家名，逗号分隔多个；**留空 = 跟随 `playerName`** |
+| `skinModel` | `auto` / `wide` / `slim`。`auto` 按像素空洞数判断，判错了手动指定 |
+
+**两个必须知道的限制：**
+
+- **皮肤是客户端行为**。只有装了同一个 mod 的客户端才看得到；没装的玩家看到的是默认皮肤。
+- **只影响 agent 的身体**，不会改你自己的皮肤。
+
 ## 游戏内命令
 
 | 命令 | 作用 |
