@@ -5,6 +5,10 @@ description: 在 Minecraft（NeoForge 1.21.1）里与玩家实时人机协作。
 
 # Minecraft 游戏内人机协作桥
 
+
+> 完整接口参考（端点、35 个工具、WebSocket 协议、拒绝语义）：
+> https://github.com/1nsaneeee/agentinminecraft/blob/main/docs/MCP.md
+
 ## 判断入口（按顺序）
 
 1. **工具表里有 `mcp__minecraft__*`？** → 有，直接调用，别碰 KubeJS。这是主路径。

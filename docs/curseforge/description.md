@@ -57,6 +57,12 @@ agent 自己切不回 `work`，要真人输入。能自己解开的限制不叫�
 `config/agentinminecraft.json`，游戏内可用 `/agent config` 查看、`/agent config set` 修改。
 默认只绑 `127.0.0.1`、强制 48 位 token、**世界写入默认关闭**。
 
+## 技术参考
+
+35 个 MCP 工具的完整清单、WebSocket 协议、鉴权与拒绝语义，在仓库里：
+
+**https://github.com/1nsaneeee/agentinminecraft/blob/main/docs/MCP.md**
+
 ## 安全
 
 这是**游戏内 RCE 级别**的能力：能读写方块、跑任意命令、操作一具真实玩家。
