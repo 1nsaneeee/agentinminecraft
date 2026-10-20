@@ -99,6 +99,21 @@ chat 模式在**工具入口**强制，拒绝：
 .\build.ps1 -Instance 'D:\other\.minecraft'   # 装到别的实例
 ```
 
+## 配套设施
+
+发布包里除 jar 之外还有 `harness/`，是**编排侧**那一半。没有它也能用
+（任何 MCP 客户端都能连），装上之后才能在游戏里说话直接唤醒 agent：
+
+| 文件 | 作用 |
+|---|---|
+| `harness/INSTALL.md` | 两侧完整的安装、验证、卸载步骤 |
+| `harness/dsh-mc-chat/` | DSH 插件：常驻 WS 连接，游戏内发言唤醒 agent，转发模式/会话指令 |
+| `harness/profile-patch-snippet.yml` | 粘进 `cordis.patch.yml` 的片段，**不含绝对路径** |
+| `harness/skills/minecraft-agent-bridge/SKILL.md` | 给 agent 的工具使用说明 |
+
+插件查找 `config/mcagent.json` 的顺序：片段里的 `configPath` → 环境变量 `MCAGENT_CONFIG`
+→ 当前工作目录下的 `config/mcagent.json`，换机器不用改片段。
+
 改完 mod **必须重启游戏**，FML 没有热重载。
 
 ```powershell

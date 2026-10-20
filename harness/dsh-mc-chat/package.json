@@ -1,0 +1,9 @@
+{
+  "name": "dsh-mc-chat",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  }
+}
