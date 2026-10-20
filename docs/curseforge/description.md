@@ -8,7 +8,7 @@
 
 完整文档（安装、配置、全部 35 个工具、WebSocket 协议、已知限制）在 GitHub：
 
-**https://github.com/1nsaneeee/mcagent**
+**https://github.com/1nsaneeee/agentinminecraft**
 
 ## 这是什么
 
