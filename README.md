@@ -1,5 +1,10 @@
 # Agent In Minecraft
 
+<p align="center">
+  <img src="./assets/readme/hero.webp" width="100%"
+       alt="Agent In Minecraft —— 让 AI 拥有一具会走、会挖、会打的身体">
+</p>
+
 > **⚠ 目前只支持 DeepSeek Harness。**  
 > **Client and Server**
 >

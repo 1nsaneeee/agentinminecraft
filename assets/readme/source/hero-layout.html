@@ -1,0 +1,73 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width:1200px; height:380px; overflow:hidden;
+    background:#0B1522;
+    background-image:
+      radial-gradient(900px 420px at 78% 42%, rgba(127,196,232,.16), transparent 70%),
+      radial-gradient(700px 380px at 8% 100%, rgba(242,162,75,.07), transparent 70%);
+    font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+    color:#E6F1FA; position:relative;
+  }
+  .grain { position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(127,196,232,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127,196,232,.045) 1px, transparent 1px);
+    background-size:40px 40px;
+    mask-image:radial-gradient(1200px 500px at 30% 40%, #000 30%, transparent 78%);
+    -webkit-mask-image:radial-gradient(1200px 500px at 30% 40%, #000 30%, transparent 78%);
+  }
+  .wrap { position:relative; display:flex; align-items:center; height:100%; padding:0 64px; gap:56px; }
+  .left { flex:1; min-width:0; }
+
+  .eyebrow { font-family:ui-monospace,"Cascadia Mono",Consolas,monospace; font-size:14px;
+    letter-spacing:2.4px; color:#7FC4E8; opacity:.9; display:flex; align-items:center; gap:10px; }
+  .dot { width:7px; height:7px; border-radius:2px; background:#F2A24B; }
+
+  h1 { font-size:66px; line-height:1.06; font-weight:800; letter-spacing:-1.2px; margin-top:14px;
+       color:#F4FAFF; }
+  h1 .caret { display:inline-block; width:13px; height:44px; background:#F2A24B;
+       margin-left:10px; vertical-align:-2px; border-radius:2px; opacity:.95; }
+
+  .promise { margin-top:18px; font-size:30px; line-height:1.45; color:#B7D5EA; font-weight:500; }
+  .promise b { color:#E6F1FA; font-weight:700; }
+
+  .chips { margin-top:24px; display:flex; gap:10px; }
+  .chip { font-family:ui-monospace,Consolas,monospace; font-size:13px; letter-spacing:.4px;
+    color:#9FC0D8; border:1px solid rgba(127,196,232,.28); background:rgba(127,196,232,.07);
+    padding:6px 12px; border-radius:8px; }
+  .chip.warn { color:#F2A24B; border-color:rgba(242,162,75,.35); background:rgba(242,162,75,.08); }
+
+  .art { position:relative; width:340px; height:330px; flex:0 0 340px;
+         transform:rotate(-2deg); }
+  .art .frame { position:absolute; inset:0; border-radius:24px; overflow:hidden;
+    border:2px solid rgba(127,196,232,.55);
+    box-shadow:0 26px 60px rgba(3,10,20,.55), 0 0 0 6px rgba(127,196,232,.06); }
+  .art img { width:100%; height:100%; object-fit:cover; object-position:50% 42%; display:block; }
+  .art .edge { position:absolute; inset:0; border-radius:24px; pointer-events:none;
+    background:linear-gradient(200deg, rgba(11,21,34,0) 45%, rgba(11,21,34,.55) 100%); }
+</style></head>
+<body>
+  <div class="grain"></div>
+  <div class="wrap">
+    <div class="left">
+      <div class="eyebrow"><span class="dot"></span>MINECRAFT · NEOFORGE 1.21.1 · CLIENT + SERVER</div>
+      <h1>Agent In Minecraft<span class="caret"></span></h1>
+      <div class="promise">让 AI 拥有一具<b>会走、会挖、会打</b>的身体</div>
+      <div class="chips">
+        <span class="chip">v0.3.0</span>
+        <span class="chip">MCP + WebSocket</span>
+        <span class="chip">35 tools</span>
+        <span class="chip warn">DeepSeek Harness only</span>
+      </div>
+    </div>
+    <div class="art">
+      <div class="frame"><img src="c4.png" alt=""></div>
+      <div class="edge"></div>
+    </div>
+  </div>
+</body></html>
+
+
