@@ -104,6 +104,11 @@ public final class McAgentMod {
         bus.addListener((ServerChatEvent event) -> {
             String player = event.getUsername();
             String raw = event.getRawText();
+            // The agent speaks as a real player now (PlayerChatMessage), so its own
+            // lines can reach this listener. Recording one would put it in ChatLog,
+            // where mc_wait --untilChat matches any line regardless of the system
+            // flag - the agent would wake itself up on its own sentence.
+            if (dev.mcagent.fakeplayer.FakePlayers.names().contains(player)) return;
             ChatLog.add(player, raw, false);
             McAgent.WS.pushChat(player, raw, false);
         });

@@ -2,10 +2,13 @@ package dev.mcagent;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import dev.mcagent.fakeplayer.FakePlayers;
 import dev.mcagent.util.TpsTracker;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -148,16 +151,30 @@ public final class GameBridge {
 
     // ------------------------------------------------------------------- chat
 
+    /**
+     * Speaks through the agent's own player body, so vanilla renders the
+     * {@code <name> } prefix from the sender's profile instead of this mod
+     * faking one.
+     *
+     * <p>Falls back to the old system line when no agent body is in the world:
+     * {@code mc_chat} has to keep working even with nothing spawned.</p>
+     */
     public static void say(String text) {
         if (text == null || text.isBlank()) return;
-        Component line = formatAgentLine(text);
+        String speaker = AgentConfig.get().resolvedPlayerName();
         onServer(() -> {
-            for (ServerPlayer p : server().getPlayerList().getPlayers()) {
-                p.sendSystemMessage(line);
+            ServerPlayer self = agentPlayer(speaker);
+            if (self == null) {
+                Component line = formatAgentLine(text);
+                for (ServerPlayer p : server().getPlayerList().getPlayers()) {
+                    p.sendSystemMessage(line);
+                }
+                return null;
             }
+            broadcastAsChat(self, text);
             return null;
         }, 10000);
-        McAgent.WS.pushChat(AgentConfig.get().resolvedPlayerName(), text, true);
+        McAgent.WS.pushChat(speaker, text, true);
     }
 
     /**
@@ -192,9 +209,38 @@ public final class GameBridge {
         McAgent.WS.pushChat(AgentConfig.get().resolvedPlayerName(), text, true);
     }
 
+    /** The agent's own body: the configured name if spawned, else any body. */
+    private static ServerPlayer agentPlayer(String preferred) {
+        List<String> names = FakePlayers.names();
+        if (names.isEmpty()) return null;
+        for (String n : names) {
+            if (n.equalsIgnoreCase(preferred)) return FakePlayers.byName(n);
+        }
+        return FakePlayers.byName(names.get(0));
+    }
+
     /**
-     * Renders as {@code <Deepseek> text} with the name in aqua, so agent lines
-     * read like a person talking in chat instead of a system notice.
+     * Broadcasts a genuine player chat message from an agent body.
+     *
+     * <p>Unsigned on purpose: a real client signs with the chat session it
+     * negotiated at login, which a {@link dev.mcagent.fakeplayer.FakeConnection}
+     * never has. Clients still render unsigned messages - they only lose the
+     * "message verified" hover marker.</p>
+     *
+     * <p>NeoForge may run {@code ServerChatEvent} for this broadcast. The listener
+     * skips agent-owned senders, otherwise the line would land in {@link ChatLog}
+     * and {@code mc_wait --untilChat} would match the agent's own sentence.</p>
+     */
+    private static void broadcastAsChat(ServerPlayer self, String text) {
+        PlayerChatMessage message = PlayerChatMessage.unsigned(self.getUUID(), text);
+        server().getPlayerList().broadcastChatMessage(
+                message, self, ChatType.bind(ChatType.CHAT, self));
+    }
+
+    /**
+     * Fakes a {@code <name> text} line. Only reached by {@link #tell} (a real
+     * player chat message cannot be addressed to one player) and by {@link #say}
+     * when no agent body is spawned.
      */
     private static Component formatAgentLine(String text) {
         return Component.literal("<" + AgentConfig.get().resolvedPlayerName() + "> ")

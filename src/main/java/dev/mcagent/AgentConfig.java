@@ -35,16 +35,17 @@ public final class AgentConfig {
     /** Skin model: auto (count holes), wide (4px arms) or slim (3px arms, Alex). */
     public String skinModel = "auto";
 
-    /** The player name the agent enters the world as. Empty falls back to agentName. */
+    /** The player name the agent enters the world as. This is the only name. */
     public String playerName = "Deepseek";
 
-    /** Which player wears the skin below; empty means agentName. */
+    /** Which player wears the skin below; empty means the agent's own player. */
     public String skinPlayer = "";
 
     /** Optional 64x64 skin png for the local player; empty disables the override. */
     public String skinFile = "";
 
     /** Display name the agent speaks under, rendered as {@code <name> message}. */
+    /** Legacy name field. Read for migration, never written. */
     public String agentName = "Deepseek";
 
     private static AgentConfig instance = new AgentConfig();
@@ -233,7 +234,14 @@ public final class AgentConfig {
 
     /** The configured player name, falling back to the display name. */
     public String resolvedPlayerName() {
-        return playerName == null || playerName.isBlank() ? agentName : playerName.trim();
+        if (playerName != null && !playerName.isBlank()) {
+            return playerName.trim();
+        }
+        // Migration only: older files had the display name here. Nothing writes it back.
+        if (agentName != null && !agentName.isBlank()) {
+            return agentName.trim();
+        }
+        return "Deepseek";
     }
 
     public static AgentConfig get() {
@@ -363,22 +371,6 @@ public final class AgentConfig {
         }
     }
 
-
-    private static JsonObject toJson() {
-        AgentConfig c = instance;
-        JsonObject o = Json.obj();
-        o.addProperty("enabled", c.enabled);
-        o.addProperty("host", c.host);
-        o.addProperty("port", c.port);
-        o.addProperty("token", c.token);
-        o.addProperty("allowCommands", c.allowCommands);
-        o.addProperty("allowWrite", c.allowWrite);
-        o.addProperty("maxOutputChars", c.maxOutputChars);
-        o.addProperty("maxLogLines", c.maxLogLines);
-        o.addProperty("greetOnJoin", c.greetOnJoin);
-        o.addProperty("agentName", c.agentName);
-        return o;
-    }
 
     private static String newToken() {
         byte[] raw = new byte[24];

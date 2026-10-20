@@ -939,7 +939,7 @@ public final class Tools {
     private static void registerAgentPlayers(ToolRegistry registry) {
         JsonObject spawn = ToolRegistry.schema();
         ToolRegistry.strProp(spawn, "name",
-                "Name of the agent's player. Defaults to the configured agentName.");
+                "Ignored: the name comes from playerName in config/mcagent.json.");
         ToolRegistry.numProp(spawn, "x", "Spawn X; defaults to the first real player's position.",
                 -30000000, 30000000);
         ToolRegistry.numProp(spawn, "y", "Spawn Y; defaults to the first real player's position.", -64, 320);
