@@ -55,6 +55,19 @@ $required += $mixinJar.FullName
 
 $cp = ($required -join ';')
 
+# The entrypoint annotation and the metadata must agree. They are two separate
+# strings in two files, and a mismatch only surfaces at startup as
+# "contains mod entrypoint class ... for mod with id X, which does not exist",
+# which looks like a packaging bug rather than a one-word typo.
+$declaredId = (Select-String -Path (Join-Path $root 'src\main\resources\META-INF\neoforge.mods.toml') `
+        -Pattern '^modId="([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+$sourceId = (Select-String -Path (Join-Path $root 'src\main\java\dev\mcagent\McAgent.java') `
+        -Pattern 'MOD_ID = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+if ($declaredId -ne $sourceId) {
+    throw "mod id mismatch: toml says '$declaredId', McAgent.MOD_ID says '$sourceId'"
+}
+Write-Host "mod id: $declaredId" -ForegroundColor DarkGray
+
 if (Test-Path $classes) { Remove-Item $classes -Recurse -Force }
 New-Item -ItemType Directory -Path $classes -Force | Out-Null
 

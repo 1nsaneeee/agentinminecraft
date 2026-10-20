@@ -10,7 +10,7 @@ import java.util.Locale;
 
 /** Static facade: owns the HTTP server, the MCP endpoint and the WebSocket hub. */
 public final class McAgent {
-    public static final String MOD_ID = "mcagent";
+    public static final String MOD_ID = "agentinminecraft";
     public static final String VERSION = "0.3.0";
     public static final Logger LOG = LoggerFactory.getLogger("mcagent");
 
