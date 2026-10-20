@@ -36,6 +36,9 @@ public final class McAgentMod {
             GameBridge.attach(event.getServer());
             McAgent.LOG.info("[mcagent] world loaded: {}", event.getServer().overworld().dimension().location());
             AgentConfig.load(dev.mcagent.util.Dist2.configDir());
+            // Advertise where this instance's config lives, so the harness plugin does
+            // not need a hard-coded path to one specific instance.
+            AgentDiscovery.publish();
             McAgent.WS.pushEvent("server_started", GameBridge.snapshot());
         });
 
@@ -46,6 +49,7 @@ public final class McAgentMod {
                 dev.mcagent.fakeplayer.AgentActions.cancelAll(event.getServer());
                 dev.mcagent.fakeplayer.FakePlayers.despawnAll(event.getServer());
             } finally {
+                AgentDiscovery.withdraw();
                 EditHistory.clear();
                 Watchers.clear();
                 Highlights.clear();

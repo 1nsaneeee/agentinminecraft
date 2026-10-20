@@ -80,16 +80,24 @@ New-Item -ItemType Junction `
 把 `profile-patch-snippet.yml` 的内容追加到
 `%USERPROFILE%\.dsh\profiles\desktop\cordis.patch.yml`。
 
-**不需要写绝对路径**。插件按这个顺序找 `mcagent.json`：
+**不需要写任何路径**。运行中的游戏会在 `~/.mcagent/active.json` 写下自己的配置路径，
+插件读这个指针跟随，所以：
 
-1. 片段里的 `config.configPath`
+- 换实例（开另一个 `.minecraft`）→ 自动跟过去
+- 同时开两个实例 → 跟着最后启动的那个
+- 游戏关了 → 指针被删除，插件退回静态候选，不会连一个已经死掉的端口
+
+查找顺序：
+
+1. 片段里的 `config.configPath`（需要强制指定时才写）
 2. 环境变量 `MCAGENT_CONFIG`
-3. 当前工作目录下的 `config/agentinminecraft.json`
+3. `~/.mcagent/active.json`（游戏写的指针）
+4. 当前目录下的 `config/agentinminecraft.json`
 
-如果 DSH 是从游戏实例目录启动的，第 3 条直接命中；否则设一个环境变量：
+只有全都没命中时，才需要手动设：
 
 ```powershell
-$env:MCAGENT_CONFIG = 'E:\Minecraft\.minecraft\versions\1.21.1(1)\.minecraft\config\mcagent.json'
+$env:MCAGENT_CONFIG = '<game_dir>/config/agentinminecraft.json'
 ```
 
 ### 3. 装 skill（可选）

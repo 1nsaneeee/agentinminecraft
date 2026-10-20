@@ -14,6 +14,8 @@
 
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 // 插件目录下没有 node_modules，借用 profile 的依赖树解析 @deepseek-ai/*。
@@ -55,11 +57,26 @@ export function apply(ctx, config) {
   //   1. 插件 config.configPath（显式指定）
   //   2. 环境变量 MCAGENT_CONFIG
   //   3. 当前工作目录下的 config/mcagent.json（DSH 从游戏实例目录启动时正好命中）
+  // The running game advertises which config belongs to it (the mod writes this on
+  // world load and deletes it on stop). Following that pointer is why the profile does
+  // not need a hard-coded path to one specific instance.
+  function pointerConfigPath() {
+    try {
+      const raw = readFileSync(join(homedir(), '.mcagent', 'active.json'), 'utf8')
+      const pointer = JSON.parse(raw)
+      if (pointer?.configPath && existsSync(pointer.configPath)) return pointer.configPath
+    } catch {
+      // no pointer, or a half-written one - fall through to the static candidates
+    }
+    return null
+  }
+
   function resolveConfigPath() {
     if (config?.configPath) return config.configPath
     if (process.env.MCAGENT_CONFIG) return process.env.MCAGENT_CONFIG
-    // Current file name first, then the pre-rename one, so an install that has not
-    // migrated yet still connects.
+    const fromPointer = pointerConfigPath()
+    if (fromPointer) return fromPointer
+    // Last resort: current file name, then the pre-rename one.
     for (const candidate of ['config/agentinminecraft.json', 'config/mcagent.json']) {
       if (existsSync(candidate)) return candidate
     }
