@@ -1,4 +1,4 @@
-# mcagent — Minecraft Agent Bridge
+# Agent In Minecraft
 
 > **⚠ 目前只支持 DeepSeek Harness。**
 >
@@ -37,7 +37,7 @@ agent 自己切不回 `work`，要真人输入。能自己解开的限制不叫�
 
 ## 配置
 
-`config/mcagent.json`，游戏内可用 `/agent config` 查看、`/agent config set` 修改。
+`config/agentinminecraft.json`，游戏内可用 `/agent config` 查看、`/agent config set` 修改。
 默认只绑 `127.0.0.1`、强制 48 位 token、**世界写入默认关闭**。
 
 ## 安全

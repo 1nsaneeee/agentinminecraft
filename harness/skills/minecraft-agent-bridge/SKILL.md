@@ -8,7 +8,7 @@ description: 在 Minecraft（NeoForge 1.21.1）里与玩家实时人机协作。
 ## 判断入口（按顺序）
 
 1. **工具表里有 `mcp__minecraft__*`？** → 有，直接调用，别碰 KubeJS。这是主路径。
-2. 没有工具、但游戏在跑 → 检查 `<game_dir>/config/mcagent.json` 是否存在、端口是否在听、
+2. 没有工具、但游戏在跑 → 检查 `<game_dir>/config/agentinminecraft.json` 是否存在、端口是否在听、
    以及 `cordis.patch.yml` 里有没有 `mcp-minecraft` 块。见「排障」。
 3. 游戏里有 KubeJS 没有 mod → 走文末「回退通道」。
 
@@ -62,7 +62,7 @@ MCP 是请求/响应，**没有服务端主动推给 agent 的能力**。玩家�
   会在起轮时抛 `format v4 message requires a producer-owned source kind`——
   第三方插件不是登记过的 producer，而该失败发生在 `followup` 之后，
   插件里的 try/catch 捕不到，只会看到「本轮运行失败」。玩家打字本来也是用户输入。
-- token 和端口从 `<game_dir>/config/mcagent.json` 读，不在补丁里复制凭据
+- token 和端口从 `<game_dir>/config/agentinminecraft.json` 读，不在补丁里复制凭据
 - 只转发 `system:false` 的帧；agent 自己发的和 join/leave 提示都是 `system:true`，避免自激
 - 改插件后 patch 文件是热重载触发器：动一下 insert 块（哪怕加一行注释），
   mod 日志里会出现一次 `ws disconnected` → `ws connected`，那就是新代码生效了
@@ -171,7 +171,7 @@ cd E:\Minecraft\mcagent
 | 现象 | 查什么 |
 |---|---|
 | 工具调用失败/超时 | 游戏是否在运行；`Get-NetTCPConnection -LocalPort 38121` |
-| 端口在听但连不上 | token 是否与 `config/mcagent.json` 一致；header 必须是 `Bearer <token>` |
+| 端口在听但连不上 | token 是否与 `config/agentinminecraft.json` 一致；header 必须是 `Bearer <token>` |
 | 工具不存在 | `cordis.patch.yml` 的 `mcp-minecraft` 块是否被改动；改了会热重载 |
 | 进了世界没收到问候 | 正常历史行为：问候已移到 `PlayerLoggedInEvent`，旧 jar 不会打 |
 | 想不开 harness 直接验 | `E:\Minecraft\mcagent\tools\probe.ps1 [-Tool mc_status]` |

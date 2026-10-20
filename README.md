@@ -1,4 +1,4 @@
-# mcagent — Minecraft Agent Bridge
+# Agent In Minecraft
 
 > **⚠ 目前只支持 DeepSeek Harness。**
 >
@@ -21,7 +21,7 @@ MCP（Model Context Protocol）服务器 + WebSocket 实时通道，全部跑在
 | 健康探针 | `GET /health` | 唯一免鉴权端点，用来区分"没起来"和"鉴权坏了" |
 
 默认 `127.0.0.1:38121`，除 `/health` 外全部要求 `Authorization: Bearer <token>`。
-token 在 `config/mcagent.json`，首次启动自动生成。
+token 在 `config/agentinminecraft.json`，首次启动自动生成。
 
 ## Agent 的身体
 
@@ -78,7 +78,7 @@ chat 模式在**工具入口**强制，拒绝：
 
 ## 配置
 
-`<game_dir>/config/mcagent.json`
+`<game_dir>/config/agentinminecraft.json`
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
@@ -117,8 +117,8 @@ chat 模式在**工具入口**强制，拒绝：
 | `harness/profile-patch-snippet.yml` | 粘进 `cordis.patch.yml` 的片段，**不含绝对路径** |
 | `harness/skills/minecraft-agent-bridge/SKILL.md` | 给 agent 的工具使用说明 |
 
-插件查找 `config/mcagent.json` 的顺序：片段里的 `configPath` → 环境变量 `MCAGENT_CONFIG`
-→ 当前工作目录下的 `config/mcagent.json`，换机器不用改片段。
+插件查找 `config/agentinminecraft.json` 的顺序：片段里的 `configPath` → 环境变量 `MCAGENT_CONFIG`
+→ 当前工作目录下的 `config/agentinminecraft.json`，换机器不用改片段。
 
 改完 mod **必须重启游戏**，FML 没有热重载。
 
@@ -127,7 +127,7 @@ chat 模式在**工具入口**强制，拒绝：
 .\tools\build-live-tests.ps1   # 构建可选 QA mod（build/mcagent-qa.jar）
 ```
 
-QA mod 只允许在目录名为 `mcagent-review-*` 的存档副本里运行 `/mcagentqa run`，
+QA mod 只允许在目录名为 `AgentInMinecraft-review-*` 的存档副本里运行 `/mcagentqa run`，
 下一 tick 执行后用 `/mcagentqa results` 看结果；`/mcagentqa ticks` 输出每 tick 实际计数，
 `/mcagentqa chat` 临时进入 chat 模式 100 tick。测完把 QA jar 移走再重启。
 

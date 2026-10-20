@@ -12,6 +12,12 @@
 
 ## v0.3 — 2026-10-20
 
+> **改名**：发布用名字定为 **Agent In Minecraft**（mod id `agentinminecraft`，jar
+> `AgentInMinecraft-0.3.0.jar`）。配置文件随之改为 `config/agentinminecraft.json`，
+> 旧文件会被自动复制迁移，token 和开关不会丢。Java 包名仍是 `dev.mcagent`，
+> 日志前缀仍是 `[mcagent]`——那些是内部标识，不在用户视野里。
+
+
 Agent 有了一具能真正干活的躯体，以及它需要的全部底层修复。
 
 工具（23 → 35）：

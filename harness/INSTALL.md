@@ -4,7 +4,7 @@
 
 | 半边 | 内容 | 必需？ |
 |---|---|---|
-| 游戏侧 | `mcagent-0.3.0.jar` | **必需**。没有它就没有桥接 |
+| 游戏侧 | `AgentInMinecraft-0.3.0.jar` | **必需**。没有它就没有桥接 |
 | 编排侧 | `dsh-mc-chat` 插件 + profile 片段 + skill | 可选。没有它，你仍然可以直接调 MCP 工具，只是没有"游戏里说话就能唤醒 agent"这一段 |
 
 只装游戏侧也能用：任何 MCP 客户端（Claude Desktop、自己的脚本、`curl`）都能连。
@@ -21,13 +21,13 @@
 
 ### 2. 装 jar
 
-把 `mcagent-0.3.0.jar` 放进实例的 `mods/` 目录。
+把 `AgentInMinecraft-0.3.0.jar` 放进实例的 `mods/` 目录。
 
 ### 3. 首次启动
 
 启动游戏（或服务器），进入一个世界。mod 会：
 
-1. 在 `config/mcagent.json` 写一份配置，**自动生成 48 位 token**
+1. 在 `config/agentinminecraft.json` 写一份配置，**自动生成 48 位 token**
 2. 在 `127.0.0.1:38121` 起 HTTP + WebSocket
 3. 在聊天栏打印一行"桥接已就绪"
 
@@ -42,7 +42,7 @@ curl http://127.0.0.1:38121/health
 
 ### 5. 配置
 
-`config/mcagent.json`，游戏内可以用 `/agent config` 查看、`/agent config set` 修改。
+`config/agentinminecraft.json`，游戏内可以用 `/agent config` 查看、`/agent config set` 修改。
 字段说明见 README 的配置表。
 
 **默认 `allowWrite` 是 `false`**：`mc_fill` / `mc_set_block` / 传送都会被拒。
@@ -84,7 +84,7 @@ New-Item -ItemType Junction `
 
 1. 片段里的 `config.configPath`
 2. 环境变量 `MCAGENT_CONFIG`
-3. 当前工作目录下的 `config/mcagent.json`
+3. 当前工作目录下的 `config/agentinminecraft.json`
 
 如果 DSH 是从游戏实例目录启动的，第 3 条直接命中；否则设一个环境变量：
 
@@ -131,7 +131,7 @@ chat mode does not edit the world directly - use the agent player's own hands, o
 
 ```powershell
 # 游戏侧
-Remove-Item <game_dir>\mods\mcagent-0.3.0.jar
+Remove-Item <game_dir>\mods\AgentInMinecraft-0.3.0.jar
 Remove-Item <game_dir>\config\mcagent.json -Recurse -Force   # 含 token
 
 # 编排侧
@@ -150,7 +150,7 @@ Remove-Item <game_dir>\config\mcagent.json -Recurse -Force   # 含 token
 
 - **不要**把 `host` 改成 `0.0.0.0` 放到公网
 - **不要**关掉 token 校验
-- token 不会出现在日志和 `/agent config` 输出里，但会出现在 `config/mcagent.json` 里，
+- token 不会出现在日志和 `/agent config` 输出里，但会出现在 `config/agentinminecraft.json` 里，
   所以别把这个文件发给别人
 
 chat 模式是给 agent 上的牵引绳：它保留身体的动作（走、挖、放、用、打），

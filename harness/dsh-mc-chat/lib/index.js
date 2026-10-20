@@ -13,7 +13,7 @@
 // 这样轮换 token 只需要改一处。
 
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 
 // 插件目录下没有 node_modules，借用 profile 的依赖树解析 @deepseek-ai/*。
@@ -58,7 +58,12 @@ export function apply(ctx, config) {
   function resolveConfigPath() {
     if (config?.configPath) return config.configPath
     if (process.env.MCAGENT_CONFIG) return process.env.MCAGENT_CONFIG
-    return 'config/mcagent.json'
+    // Current file name first, then the pre-rename one, so an install that has not
+    // migrated yet still connects.
+    for (const candidate of ['config/agentinminecraft.json', 'config/mcagent.json']) {
+      if (existsSync(candidate)) return candidate
+    }
+    return 'config/agentinminecraft.json'
   }
 
   function endpoint() {

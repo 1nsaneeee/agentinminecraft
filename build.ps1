@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $version = '0.3.0'
+$name = 'AgentInMinecraft'
 $lib = 'C:\Users\CJ\AppData\Roaming\PrismLauncher\libraries'
 $jdk = 'C:\Program Files\Java\jdk-21.0.10'
 $out = Join-Path $root 'build'
@@ -65,7 +66,7 @@ if ($LASTEXITCODE -ne 0) { throw "javac failed with exit code $LASTEXITCODE" }
 
 Copy-Item (Join-Path $root 'src\main\resources\*') $classes -Recurse -Force
 
-$jarPath = Join-Path $out "mcagent-$version.jar"
+$jarPath = Join-Path $out "$name-$version.jar"
 if (Test-Path $jarPath) { Remove-Item $jarPath -Force }
 & "$jdk\bin\jar.exe" --create --file $jarPath -C $classes .
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
@@ -75,8 +76,10 @@ Write-Host "built $jarPath ($([math]::Round((Get-Item $jarPath).Length/1KB,1)) K
 if (-not $NoInstall) {
     $mods = Join-Path $Instance 'mods'
     if (-not (Test-Path $mods)) { throw "mods folder not found: $mods" }
-    # Two mcagent jars in mods would be a duplicate mod id and refuse to load.
+    # Remove both the current name and the pre-rename one: identical mod id twice in
+    # mods/ makes FML refuse to load, and the old jar would also fight for the port.
     Get-ChildItem $mods -Filter 'mcagent-*.jar' -ErrorAction SilentlyContinue | Remove-Item -Force
-    Copy-Item $jarPath (Join-Path $mods "mcagent-$version.jar") -Force
+    Get-ChildItem $mods -Filter "$name-*.jar" -ErrorAction SilentlyContinue | Remove-Item -Force
+    Copy-Item $jarPath (Join-Path $mods "$name-$version.jar") -Force
     Write-Host "installed into $mods" -ForegroundColor Green
 }

@@ -5,7 +5,7 @@
 # 配置路径不需要写死。插件按以下顺序查找 mcagent.json：
 #   1. 本片段里的 config.configPath
 #   2. 环境变量 MCAGENT_CONFIG
-#   3. 当前工作目录下的 config/mcagent.json
+#   3. 当前工作目录下的 config/agentinminecraft.json
 # 如果 DSH 不是从游戏实例目录启动的，取消下一行注释并填实际路径：
 #
 #   config:

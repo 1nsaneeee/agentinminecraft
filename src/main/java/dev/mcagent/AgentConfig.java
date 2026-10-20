@@ -265,7 +265,18 @@ public final class AgentConfig {
     }
 
     public static synchronized void load(Path configDir) {
-        file = configDir.resolve("mcagent.json");
+        file = configDir.resolve("agentinminecraft.json");
+        // Migration from the pre-rename file name: copy it once, keep the old one as a
+        // backup. A rename must not silently reset someone's token and switches.
+        Path legacy = configDir.resolve("mcagent.json");
+        if (!Files.isRegularFile(file) && Files.isRegularFile(legacy)) {
+            try {
+                Files.copy(legacy, file);
+                McAgent.LOG.info("[mcagent] migrated {} to {}", legacy.getFileName(), file.getFileName());
+            } catch (Exception e) {
+                McAgent.LOG.warn("[mcagent] could not migrate the old config", e);
+            }
+        }
         AgentConfig cfg = new AgentConfig();
         if (Files.isRegularFile(file)) {
             try {

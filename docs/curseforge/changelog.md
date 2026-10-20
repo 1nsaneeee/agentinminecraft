@@ -1,4 +1,4 @@
-## 0.3.0 — The agent gets a body
+## 0.3.0 — Agent In Minecraft
 
 **只支持 DeepSeek Harness。** MCP 是标准的，任何 MCP 客户端都能连；但游戏内唤醒、
 `/agent` 会话与模式转发、chat 模式语气注入这些配套能力只针对 DeepSeek Harness 实现。
