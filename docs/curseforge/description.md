@@ -4,6 +4,13 @@
 
 **让 AI 在你的世界里拥有一具真的身体。**
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Minecraft-1.21.1-3C8527?style=flat-square&amp;labelColor=0B1522" alt="Minecraft 1.21.1">
+  <img src="https://img.shields.io/badge/NeoForge-21.1.x-F16436?style=flat-square&amp;labelColor=0B1522" alt="NeoForge 21.1.x">
+  <img src="https://img.shields.io/badge/License-MIT-4C9AFF?style=flat-square&amp;labelColor=0B1522" alt="MIT">
+  <img src="https://img.shields.io/badge/Harness-DeepSeek_only-F2A24B?style=flat-square&amp;labelColor=0B1522" alt="DeepSeek Harness only">
+</p>
+
 > ⚠ **目前只支持 DeepSeek Harness。** mod 本身是标准 MCP + WebSocket，任何 MCP 客户端都能连；
 > 但游戏内唤醒、`/agent` 的模式与会话转发、chat 模式的语气注入，只针对 DeepSeek Harness 实现。
 
