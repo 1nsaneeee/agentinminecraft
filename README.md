@@ -147,3 +147,4 @@
 | [docs/MCP.md](docs/MCP.md) | 35 个工具、协议、鉴权和拒绝语义 |
 | [docs/BUILD.md](docs/BUILD.md) | 构建、测试、发布、目录结构 |
 | [harness/INSTALL.md](harness/INSTALL.md) | 编排侧（插件、profile、skill）的安装与卸载 |
+| [docs/TODO.md](docs/TODO.md) | 待办与已决定不做的事，附成本 |
