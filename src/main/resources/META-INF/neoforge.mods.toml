@@ -1,0 +1,32 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+issueTrackerURL="https://example.invalid/mcagent"
+
+[[mods]]
+modId="mcagent"
+version="0.3.0"
+displayName="MC Agent Bridge"
+authors="local"
+description='''
+Exposes the running game to an external AI agent: an MCP server over HTTP
+(streamable-http) plus a live WebSocket channel for chat and game events.
+Loopback-only and token protected by default.
+'''
+
+[[dependencies.mcagent]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.0,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.mcagent]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="BOTH"
+
+[[mixins]]
+config="mcagent.mixins.json"

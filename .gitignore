@@ -1,0 +1,9 @@
+# build output
+build/
+*.jar
+
+# javac writes its long command line here when it fails
+javac.*.args
+
+# logs and local scratch
+*.log

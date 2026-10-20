@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.mcagent.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "PlayerInfoMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+    "NetworkRegistryMixin"
+  ]
+}
