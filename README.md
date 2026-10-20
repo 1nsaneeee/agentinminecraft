@@ -3,58 +3,72 @@
 把一个正在运行的 Minecraft 客户端/整合包，变成 AI agent 可以直接操作的进程：
 MCP（Model Context Protocol）服务器 + WebSocket 实时通道，全部跑在游戏进程内。
 
-替代了之前靠 KubeJS/ProbeJS 拼出来的旁路方案。
+从 0.3 起，它还能给 agent 一具**会走会挖会打的身体**——一个没有客户端连接、
+但服务端和其他玩家都当成正常玩家的 `ServerPlayer`。
 
 ## 它提供什么
 
 | 通道 | 端点 | 用途 |
 |---|---|---|
-| MCP (Streamable HTTP) | `POST /mcp` | 23 个工具：状态、命令、方块、机器 NBT、背包、实体、聊天、粒子、日志、截图、配方、任务书、批量建造/撤销 |
-| WebSocket | `GET /ws?token=` | 玩家实时发送的聊天、进出世界/离开事件，可按需订阅 |
-| 健康探针 | `GET /health` | 唯一免鉴权端点，判断"没起来"还是"鉴权坏了" |
+| MCP (Streamable HTTP) | `POST /mcp` | 35 个工具：读取游戏状态，以及操作一具真实的身体 |
+| WebSocket | `GET /ws` | 玩家实时聊天、进出世界事件、方块事件，可按需订阅 |
+| 健康探针 | `GET /health` | 唯一免鉴权端点，用来区分"没起来"和"鉴权坏了" |
 
 默认 `127.0.0.1:38121`，除 `/health` 外全部要求 `Authorization: Bearer <token>`。
-token 在 `config/mcagent.json` 里，首次启动自动生成。
+token 在 `config/mcagent.json`，首次启动自动生成。
 
-## 为什么不用 Gradle
+## Agent 的身体
 
-这套构建直接拿启动器已经下载好的 jar 当 classpath：
+`mc_player_spawn` 生成一个真实玩家：出现在 Tab 列表、占一块地、有背包、会受伤、
+会被其他模组当成正常玩家。它没有客户端，所以**一切都由服务端驱动**。
+
+| 能力 | 工具 | 怎么实现的 |
+|---|---|---|
+| 走 | `mc_player_walk` / `halt` | 带跳跃的 A* 规划 + 原版物理（`xxa/zza` + 跳跃位） |
+| 挖 | `mc_player_break` | 按 `getDestroyProgress` 算真实时长，到点 `destroyBlock` |
+| 放 | `mc_player_place` | `useItemOn`，走完整交互路径 |
+| 用 | `mc_player_use` | `useItem`：吃、喝、扔、射 |
+| 打 | `mc_player_attack` | `player.attack`，正常伤害计算 |
+| 传送 | `mc_player_teleport` | 开发工具，**chat 模式拒绝** |
+
+导航不是"撞墙就跳"：`AgentNav` 先把周围可站立的格子找出来，把
+"平移 / 上台阶 / 掉落 / 跨 2~3 格坑"当成图的边，A* 出一条路线再逐跳执行，
+跳的边会**在离开边缘之前起跳**（到边缘才跳就没有助跑了）。
+
+身体可以被皮肤覆盖：`skinFile` 指向一张 64×64 png，客户端按 `skinPlayer`
+算出的离线 UUID 匹配后套用。**这是客户端行为**，别人没装同一个 mod 看到的是默认皮肤。
+
+## 两种模式
 
 ```
-%APPDATA%\PrismLauncher\libraries\net\neoforged\neoforge\<ver>\neoforge-<ver>-client.jar   # 1561 个 NeoForge 补丁类
-%APPDATA%\PrismLauncher\libraries\net\minecraft\client\...\client-...-srg.jar              # 7936 个全量 mojmap 类
-%APPDATA%\PrismLauncher\libraries\net\neoforged\neoforge\<ver>\neoforge-<ver>-universal.jar # NeoForge API
-+ fancymodloader/loader、bus、coremods、mergetool、authlib、gson、brigadier、datafixerupper
+/agent work    正常干活，所有工具都可用
+/agent chat    只保留身体的动作，禁止直接改世界
 ```
 
-所以：**不需要联网、不需要 Gradle、不需要 NeoGradle/ModDevGradle**。
-NeoForge 1.21.1 生产环境就是 mojmap 方法名（`getBlockState`、`sendSystemMessage`），
-不涉及 SRG remap。
+chat 模式在**工具入口**强制，拒绝：
 
-几个必须知道的坑（都在 `build.ps1` 里处理了）：
+- `mc_set_block` / `mc_fill` / `mc_command` / `mc_undo`
+- `mc_player_teleport`
+- WebSocket 的 `exec` 帧（这条命令在游戏线程还会再查一次）
 
-- `@Mod` / `IEventBus` 不在 NeoForge 的三个 jar 里，在 `fancymodloader/loader` 和 `bus`
-- `net.neoforged.api.distmarker.Dist` 只有 `mergetool-*-api.jar` 里有一份
-- `Commands.performPrefixedCommand` 是**实例方法**：`server.getCommands().performPrefixedCommand(...)`
-- `CommandSourceStack` 的公开构造器接受一个 `CommandSource`，这是捕获命令输出的唯一办法
+允许：走路、挖、放、用、打、所有读取。
 
-## 构建 / 安装
+**agent 自己解不开 chat 模式**——切回 `work` 要真人输入 `/agent work`。
+能自己解开的限制就不叫限制。
 
-```powershell
-cd E:\Minecraft\mcagent
-.\build.ps1              # 编译 + 打包 + 装进实例 mods/
-.\build.ps1 -NoInstall   # 只编译
-.\build.ps1 -Instance 'D:\other\.minecraft'   # 装到别的实例
-```
+## 游戏内命令
 
-改完 mod **必须重启游戏**，FML 没有热重载。
+| 命令 | 作用 |
+|---|---|
+| `/agent work` `/agent chat` | 切换模式，并通知外部 harness |
+| `/agent new` `/agent session [n]` | 新建会话 / 切换会话 |
+| `/agent config` | 打印全部配置（token 打码） |
+| `/agent config set <key> <value>` | 改一项并写盘；空值、非法值直接拒绝 |
+| `/agent config reload` | 重读配置文件，不用重启 |
 
-回归验证：`./tools/test.ps1` 独立验证 HTTP/WS，不连接游戏。`./tools/build-live-tests.ps1`
-构建可选的 `build/mcagent-qa.jar`；它只允许在目录名为 `mcagent-review-*` 的存档副本中
-运行 `/mcagentqa run`，下一 tick 执行后用 `/mcagentqa results` 查看维度填充/撤销、
-权限、挖掘 hooks 与世界切换清理的结果。
-`/mcagentqa ticks` 返回玩家每 tick 的实际计数；`/mcagentqa chat` 临时进入 chat 模式
-100 tick 后自动恢复，供 MCP/WS 拒绝路径验证。测试结束后移走 QA jar，再重启游戏。
+`/work` `/chat` `/new` `/session` 是等价别名（未被占用时才注册）。
+
+改 `host` / `port` / `enabled` 会写进文件，但**要重启才生效**——端口在启动时已经绑定了。
 
 ## 配置
 
@@ -62,53 +76,76 @@ cd E:\Minecraft\mcagent
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| `enabled` | `true` | 关掉就不启动 HTTP |
+| `enabled` | `true` | 关掉就不启动 HTTP（重启生效） |
 | `host` | `127.0.0.1` | 想暴露到局域网才改，别乱改 |
-| `port` | `38121` | |
-| `token` | 自动生成 | 48 位 hex |
+| `port` | `38121` | 绑定端口（重启生效） |
+| `token` | 自动生成 | 48 位 hex，**只能改文件** |
 | `allowCommands` | `true` | 是否允许 `mc_command` / WS `exec` |
-| `allowWrite` | `false` | 世界写入（放方块等）单独一道开关 |
+| `allowWrite` | `false` | 世界写入与传送的独立开关 |
 | `maxOutputChars` | `16000` | 命令输出截断长度 |
-| `greetOnJoin` | `true` | 进世界时在聊天栏打印一行桥接就绪 |
-| `agentName` | `Deepseek` | 聊天显示名，格式 `<Deepseek> 内容` |
+| `maxLogLines` | `500` | `mc_logs` 单次上限 |
+| `greetOnJoin` | `true` | 进世界时在聊天栏打印桥接就绪 |
+| `playerName` | `Deepseek` | **身体的名字**：生成玩家、皮肤匹配、Tab 列表 |
+| `agentName` | `Deepseek` | **没有身体时**发言用的署名 |
+| `skinFile` | 空 | 皮肤 png，相对路径按游戏目录解析 |
+| `skinPlayer` | 空 | 套皮肤的玩家名，逗号分隔多个；空表示跟随 `playerName` |
+| `skinModel` | `auto` | `auto` / `wide` / `slim`，auto 按像素空洞数判断 |
 
-## MCP 工具
+## 构建 / 安装 / 验证
 
-读状态：
+```powershell
+.\build.ps1                    # 编译 + 打包 + 装进实例 mods/
+.\build.ps1 -NoInstall         # 只编译
+.\build.ps1 -Instance 'D:\other\.minecraft'   # 装到别的实例
+```
 
-`mc_status` `mc_blocks` `mc_block` `mc_block_entity` `mc_entities` `mc_inventory`
-`mc_logs` `mc_screenshot`
+改完 mod **必须重启游戏**，FML 没有热重载。
 
-配方 / 注册表：
+```powershell
+.\tools\test.ps1               # 传输层回归，9 条，不连接游戏
+.\tools\build-live-tests.ps1   # 构建可选 QA mod（build/mcagent-qa.jar）
+```
 
-`mc_recipe` `mc_tags`
+QA mod 只允许在目录名为 `mcagent-review-*` 的存档副本里运行 `/mcagentqa run`，
+下一 tick 执行后用 `/mcagentqa results` 看结果；`/mcagentqa ticks` 输出每 tick 实际计数，
+`/mcagentqa chat` 临时进入 chat 模式 100 tick。测完把 QA jar 移走再重启。
 
-任务书（需要 FTB Quests，不存在则不注册这两个工具）：
+## MCP 工具（35 个）
 
-`mc_quests` `mc_quest`
+**读取**：`mc_status` `mc_blocks` `mc_block` `mc_block_entity` `mc_entities`
+`mc_inventory` `mc_logs` `mc_screenshot`
 
-操作：
+**配方 / 注册表**：`mc_recipe` `mc_tags`
 
-`mc_command` `mc_chat` `mc_chat_read` `mc_highlight` `mc_wait`
-`mc_fill` `mc_undo` `mc_history`
-`mc_watch` `mc_watch_list`
-`mc_set_block`
+**任务书**（需要 FTB Quests，否则不注册）：`mc_quests` `mc_quest`
 
-- 所有游戏状态读取都会跳到**服务端主线程**执行，HTTP 线程不会碰世界数据
-- `mc_screenshot` 跳到**客户端渲染线程**，用 `Screenshot.takeScreenshot` + `NativeImage.asByteArray()`（PNG）
-- `mc_wait` 用来和游戏节奏同步：等 N tick、或等玩家说一句匹配正则的话
-- `mc_fill` 走 `/fill`（完整的 blockstate 语法），但会先记下区域内每个方块的旧状态和方块实体 NBT，
-  所以 `mc_undo` 能把机器连同里面的东西一起还原。只记录**自己改的**区域，不碰玩家改动。
-- `mc_highlight` 的描边由服务端每 8 tick 重发一次，所以 `seconds` 是真的持续秒数
-- `mc_watch` 登记一个方块实体，NBT 一变就推 WS 事件（需要客户端订阅 `blocks` topic）
+**操作**：`mc_command` `mc_chat` `mc_chat_read` `mc_highlight` `mc_wait`
+`mc_fill` `mc_undo` `mc_history` `mc_watch` `mc_watch_list` `mc_set_block`
+
+**身体**：`mc_player_spawn` `mc_player_despawn` `mc_player_list` `mc_player_look`
+`mc_player_hold` `mc_player_walk` `mc_player_halt` `mc_player_teleport`
+`mc_player_break` `mc_player_place` `mc_player_use` `mc_player_attack`
+
+几条要点：
+
+- 所有世界读取都跳到**服务端主线程**执行，HTTP 线程不碰世界数据
+- `mc_screenshot` 跳到**客户端渲染线程**，抓主渲染目标
+- `mc_wait` 用来和游戏节奏同步：等 N tick，或等玩家说一句匹配正则的话
+- `mc_fill` 走 `/fill`（完整 blockstate 语法），但会先记录区域内每个方块的旧状态和
+  方块实体 NBT，所以 `mc_undo` 能把机器连同里面的东西一起还原
+- `mc_undo` 只撤销 **agent 自己**通过 `mc_fill` 做的改动，栈深 16
+- `mc_watch` 登记方块实体，NBT 一变就推 WS 事件（客户端需订阅 `blocks`）
+- `mc_chat` 在有身体时**走真实玩家聊天**（`PlayerChatMessage` + `PlayerList.broadcastChatMessage`），
+  名字来自玩家 profile；没有身体时才退回一条 `<agentName>` 系统行
 
 ## WebSocket 协议
 
 客户端 → 服务端：
 
 ```json
-{"type":"say","text":"..."}              // 以 agent 身份说话
-{"type":"exec","command":"..."}          // 执行命令（需 allowCommands）
+{"type":"say","text":"..."}              // 以 agent 的身份说话
+{"type":"say_json","component":{...}}    // 发一个可点击的 JSON 组件
+{"type":"exec","command":"..."}          // 执行命令（需 allowCommands，chat 模式拒绝）
 {"type":"state"}                          // 主动要一次完整状态
 {"type":"sub","topics":["blocks"]}        // 订阅额外主题
 {"type":"unsub","topics":["blocks"]}
@@ -127,34 +164,57 @@ cd E:\Minecraft\mcagent
 {"type":"exec_result","command":"...","output":"..."}
 ```
 
-**主题**：`chat`（默认）与 `events`（默认）始终订阅；`blocks` 需要显式 `sub`，
-里面是方块实体变更、方块放置/破坏——默认关掉是故意的，否则你每放一块砖都会推一条。
+**主题**：`chat` 与 `events` 默认订阅；`blocks` 需要显式 `sub`——否则每放一块砖都会推一条。
+`block_place` / `block_break` 只推**带方块实体**的方块（机器、容器）。
 
-`block_place` / `block_break` 只推**带方块实体**的方块（机器、容器），
-普通建筑方块不推。
+`tools/ws-watch.mjs` 是零依赖客户端，`--exit-on chat` 模式下一收到玩家发言就退出，
+适合把"进程结束"当信号用。
 
-`tools/ws-watch.mjs` 是个零依赖客户端，`--exit-on chat` 模式下玩家一说话进程就退出，
-适合拿"进程结束"当信号唤醒 agent。
+## 为什么不用 Gradle
+
+构建直接拿启动器已下载的 jar 当 classpath：
+
+```
+%APPDATA%\PrismLauncher\libraries\net\neoforged\neoforge\<ver>\neoforge-<ver>-client.jar
+%APPDATA%\PrismLauncher\libraries\net\minecraft\client\...\client-...-srg.jar
+%APPDATA%\PrismLauncher\libraries\net\neoforged\neoforge\<ver>\neoforge-<ver>-universal.jar
++ fancymodloader/loader、bus、coremods、mergetool、authlib、gson、brigadier、datafixerupper
+```
+
+所以：**不需要联网、不需要 Gradle、不需要 NeoGradle/ModDevGradle**。
+NeoForge 1.21.1 生产环境就是 mojmap 方法名，不涉及 SRG remap。
+
+几个必须知道的坑（`build.ps1` 里都处理了）：
+
+- `@Mod` / `IEventBus` 不在 NeoForge 的三个 jar 里，在 `fancymodloader/loader` 和 `bus`
+- `net.neoforged.api.distmarker.Dist` 只有 `mergetool-*-api.jar` 里有一份
+- `Commands.performPrefixedCommand` 是**实例方法**
+- `CommandSourceStack` 的公开构造器接受一个 `CommandSource`，这是捕获命令输出的唯一办法
+- 编译要加 `-proc:none`：sponge-mixin 自带的注解处理器需要 ASM，会把 javac 搞崩
 
 ## 客户端 / 服务端分离
 
-`net.minecraft.client.*` 只在 `client/ClientApiImpl.java` 里出现，通过
-`Class.forName` + dist 判断反射加载，所以这个 mod 在专用服务器上也能加载，
-只是 `mc_screenshot` 会返回"客户端专用"。
+`net.minecraft.client.*` 只在 `client/` 下出现，通过 dist 判断 + 反射加载，
+所以这个 mod 在专用服务器上也能加载，只是 `mc_screenshot` 会返回"客户端专用"。
 
-## 已知限制（v0.2）
+## 已知限制
 
-- MCP 无状态：不发 `Mcp-Session-Id`，不支持 server→client 的 sampling/roots
+- MCP 无状态：不发 `Mcp-Session-Id`，不支持 sampling/roots
 - 未实现 HTTP 压缩、TLS（只绑回环，够用）
-- `mc_blocks` 单次上限 8000 行；`mc_fill` 单次上限 4096 格（受撤销内存限制）
-- 撤销栈只保留最近 16 次操作，且**只覆盖 agent 通过 `mc_fill` 做的改动**
-- `mc_recipe` 遍历的是原版 `RecipeManager`，对自定义 `RecipeType`
-  （如 Custom Machinery）只能统计到该类型的配方数量，读不出其专有字段
-- WebSocket 无消息队列：游戏线程直接写 socket，极端卡顿时会短暂阻塞
-- 截图抓的是上一帧的主渲染目标，个别驱动下可能出现半帧
+- `mc_blocks` 单次上限 8000 行；`mc_fill` 单次上限 4096 格
+- 撤销栈 16 层，且只覆盖 `mc_fill` 的改动
+- `mc_recipe` 对自定义 `RecipeType`（如 Custom Machinery）只能统计数量
+- WebSocket 无发送队列，极端卡顿时会短暂阻塞
+- 截图抓的是上一帧主渲染目标，个别驱动下可能半帧
+- **身体需要 mod 自己驱动 tick**：世界不为这具无客户端玩家调用 `doTick()`，
+  物理和移动由 mod 每 tick 手动驱动一次；服务端卡住时身体也停
+- **挖掘是自己计时的**：裂纹进度由 mod 发送，不走客户端的确认链路
+- **导航是局部的**：包围盒 `±10` 格、6000 节点，需要绕远路时退回直线 steering
+- **皮肤是客户端行为**：只有装了同一个 mod 且在 `skinPlayer` 名单里的人看得到
 
 ## 安全
 
-这是游戏内 RCE 级别的能力。默认值已经按"单人测试存档"设计：
-只绑回环、强制 token、写操作默认关。**不要**把 `host` 改成 `0.0.0.0`
-放到公网，也不要关认证。
+这是游戏内 RCE 级别的能力。默认值按"单人测试存档"设计：只绑回环、强制 token、
+写操作默认关。**不要**把 `host` 改成 `0.0.0.0` 放到公网，也不要关认证。
+
+`agentName` 以明文出现在聊天里，`token` 不会——`/agent config` 只显示前 4 位和后 4 位。

@@ -7,3 +7,6 @@ javac.*.args
 
 # logs and local scratch
 *.log
+
+# release artifacts
+dist/
