@@ -17,6 +17,26 @@
 从 0.3 起，它还能给 agent 一具**会走会挖会打的身体**——一个没有客户端连接、
 但服务端和其他玩家都当成正常玩家的玩家实体。
 
+## 实机
+
+<p align="center">
+  <img src="./assets/readme/screenshots/01-body.png" width="49%"
+       alt="Agent 的近景：冰蓝色皮肤、手持铁镐、头顶名字牌">
+  <img src="./assets/readme/screenshots/02-together.png" width="49%"
+       alt="Agent 和玩家并排站着，两个名字牌都在">
+</p>
+<p align="center">
+  <img src="./assets/readme/screenshots/03-mining.png" width="49%"
+       alt="挖掘中：方块表面出现裂纹进度">
+  <img src="./assets/readme/screenshots/04-chat-mode.png" width="49%"
+       alt="切到 chat 模式后 agent 说的第一句话">
+</p>
+
+左上：它是一具真的玩家，有皮肤、有名字牌、手里拿着工具。
+右上：不是聊天框——它就站在你旁边。
+左下：挖方块时有真实进度，不是瞬间消失。
+右下：`/agent chat` 切换后，它会开口说话。
+
 ## 特色功能
 
 - 实时监听玩家对话，实时做出响应
