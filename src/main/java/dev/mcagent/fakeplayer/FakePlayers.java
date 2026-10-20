@@ -116,15 +116,16 @@ public final class FakePlayers {
         if (player == null) {
             return false;
         }
+        AgentMovement.stop(player);
+        AgentActions.cancelBreak(player);
         server.getPlayerList().remove(player);
         return true;
     }
 
     public static synchronized void despawnAll(MinecraftServer server) {
-        for (ServerPlayer player : new ArrayList<>(LIVE.values())) {
-            server.getPlayerList().remove(player);
+        for (String name : new ArrayList<>(LIVE.keySet())) {
+            despawn(server, name);
         }
-        LIVE.clear();
     }
 
     public static synchronized List<String> names() {

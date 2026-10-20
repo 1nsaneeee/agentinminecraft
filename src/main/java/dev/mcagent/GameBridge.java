@@ -58,6 +58,7 @@ public final class GameBridge {
         java.util.concurrent.CompletableFuture<T> future = new java.util.concurrent.CompletableFuture<>();
         s.execute(() -> {
             try {
+                if (server != s) throw new IllegalStateException("the world changed before the task could run");
                 future.complete(task.get());
             } catch (Throwable t) {
                 future.completeExceptionally(t);
@@ -95,17 +96,28 @@ public final class GameBridge {
      * sends back through the source.
      */
     public static String runCommand(String command, String playerName, int permission) {
+        return runCommand(command, playerName, permission, null);
+    }
+
+    /** Uses the same level for a world edit and its undo snapshot. */
+    public static String runCommand(String command, String playerName, int permission, ServerLevel targetLevel) {
         return onServer(() -> {
+            // Recheck on the game thread, including commands received through WebSocket.
+            if (AgentMode.isChat()) throw new IllegalStateException("chat mode does not run commands; use /agent work first");
+            if (targetLevel != null && server().getLevel(targetLevel.dimension()) != targetLevel) {
+                throw new IllegalStateException("command level belongs to an inactive world");
+            }
             String cleaned = command.startsWith("/") ? command.substring(1) : command;
             ServerPlayer player = player(playerName);
             CommandSourceStack base = player.createCommandSourceStack();
+            ServerLevel level = targetLevel == null ? base.getLevel() : targetLevel;
             List<String> lines = new ArrayList<>();
-            CommandSource sink = new CaptureSource(lines, base.getLevel());
+            CommandSource sink = new CaptureSource(lines, level);
             CommandSourceStack stack = new CommandSourceStack(
                     sink,
                     base.getPosition(),
                     base.getRotation(),
-                    base.getLevel(),
+                    level,
                     permission < 0 ? Math.max(server().getProfilePermissions(player.getGameProfile()), 2) : permission,
                     base.getTextName(),
                     base.getDisplayName(),

@@ -569,7 +569,7 @@ public final class Tools {
                         EditHistory.capture(level, positions, "fill", cells);
                         String cmd = String.format(Locale.ROOT, "fill %d %d %d %d %d %d %s %s",
                                 minX, minY, minZ, maxX, maxY, maxZ, block, mode);
-                        String out = GameBridge.runCommand(cmd, null, 4);
+                        String out = GameBridge.runCommand(cmd, null, 4, level);
                         EditHistory.push("fill " + block + " @ " + minX + "," + minY + "," + minZ, level, cells);
                         return McpResult.text(out + "\n[" + positions.size() + " cells recorded, "
                                 + EditHistory.size() + " operations in undo history]");
@@ -583,6 +583,12 @@ public final class Tools {
                         + "block entity contents. Only agent-made edits are restorable.",
                 undo,
                 args -> GameBridge.onServer(() -> {
+                    if (AgentMode.isChat()) {
+                        return McpResult.error("chat mode does not edit the world directly; use /agent work first");
+                    }
+                    if (!AgentConfig.get().allowWrite) {
+                        return McpResult.error("world writes are disabled; set allowWrite=true in config/mcagent.json");
+                    }
                     int steps = Math.max(1, Math.min(8, Json.i(args, "steps", 1)));
                     List<String> done = new ArrayList<>();
                     for (int i = 0; i < steps; i++) {

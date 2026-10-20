@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * also makes WebSocket hijacking trivial.</p>
  */
 public final class HttpCore implements AutoCloseable {
+    private static final int MAX_BODY_BYTES = 8 * 1024 * 1024;
 
     public interface Handler {
         void handle(Request req, Response res) throws Exception;
@@ -267,7 +268,7 @@ public final class HttpCore implements AutoCloseable {
             } catch (NumberFormatException e) {
                 throw new IOException("bad content-length: " + cl);
             }
-            if (len < 0 || len > 8 * 1024 * 1024) throw new IOException("body too large: " + len);
+            if (len < 0 || len > MAX_BODY_BYTES) throw new IOException("body too large: " + len);
             req.body = readFully(in, len);
         }
         return req;
@@ -277,7 +278,7 @@ public final class HttpCore implements AutoCloseable {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         while (true) {
             String sizeLine = readLine(in, 1024);
-            if (sizeLine == null) break;
+            if (sizeLine == null) throw new IOException("eof in chunked body");
             int semi = sizeLine.indexOf(';');
             String hex = (semi < 0 ? sizeLine : sizeLine.substring(0, semi)).trim();
             int size;
@@ -285,6 +286,10 @@ public final class HttpCore implements AutoCloseable {
                 size = Integer.parseInt(hex, 16);
             } catch (NumberFormatException e) {
                 throw new IOException("bad chunk size: " + hex);
+            }
+            // Check before allocating either the chunk or the accumulated body.
+            if (size < 0 || size > MAX_BODY_BYTES - out.size()) {
+                throw new IOException("chunked body too large or invalid chunk size: " + size);
             }
             if (size == 0) {
                 // trailer
@@ -295,7 +300,7 @@ public final class HttpCore implements AutoCloseable {
                 break;
             }
             out.write(readFully(in, size));
-            readLine(in, 1024); // CRLF after chunk
+            if (!"".equals(readLine(in, 1024))) throw new IOException("missing CRLF after chunk");
         }
         return out.toByteArray();
     }

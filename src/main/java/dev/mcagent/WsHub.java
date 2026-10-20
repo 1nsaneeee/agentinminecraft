@@ -94,7 +94,9 @@ public final class WsHub {
                     case "say_json" -> GameBridge.sayComponent(Json.sub(msg, "component"));
                     case "exec" -> {
                         String cmd = Json.str(msg, "command", "");
-                        if (!AgentConfig.get().allowCommands) {
+                        if (AgentMode.isChat()) {
+                            ws.sendJson(error("chat mode does not run commands; use /agent work first"));
+                        } else if (!AgentConfig.get().allowCommands) {
                             ws.sendJson(error("commands disabled by config (allowCommands=false)"));
                         } else {
                             String out = GameBridge.runCommand(cmd, Json.str(msg, "player", null), -1);

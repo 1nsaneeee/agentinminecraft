@@ -115,10 +115,9 @@ public final class AgentMovement {
     /**
      * Drive the agent's players from the server tick.
      *
-     * The two things a player needs per tick live in different methods:
-     *   ServerPlayer.tick()   -> gameMode.tick(), i.e. block-breaking progress
-     *   ServerPlayer.doTick() -> Player.tick(), i.e. physics, movement, gravity
-     * Nothing ticks this player, so both are called here.
+     * The world already calls ServerPlayer.tick(), including gameMode.tick().
+     * Only the client connection's doTick() is missing: it drives Player.tick()
+     * and therefore physics, movement and gravity.
      */
     private static void drivePlayerTicks(MinecraftServer server) {
         for (String name : FakePlayers.names()) {
@@ -128,9 +127,8 @@ public final class AgentMovement {
             }
             if (TICK_WARNED.add(player.getUUID())) {
                 dev.mcagent.McAgent.LOG.info(
-                        "[mcagent] driving tick+doTick for {} from the server tick hook", name);
+                        "[mcagent] driving doTick for {} from the server tick hook", name);
             }
-            player.tick();
             player.doTick();
         }
     }
@@ -294,5 +292,6 @@ public final class AgentMovement {
             }
         }
         WALKS.clear();
+        TICK_WARNED.clear();
     }
 }

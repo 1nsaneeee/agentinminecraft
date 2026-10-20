@@ -15,9 +15,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.CommonHooks;
+import net.neoforged.neoforge.common.util.TriState;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,9 +31,6 @@ import java.util.UUID;
  * block-break hook. Going through the game mode means a fake player behaves like a player.</p>
  */
 public final class AgentActions {
-
-    /** Sequence numbers the server uses to ack break packets; any increasing value works. */
-    private static final AtomicInteger SEQUENCE = new AtomicInteger();
 
     private static final double REACH = 4.5;
 
@@ -47,18 +45,22 @@ public final class AgentActions {
      * Start mining: compute the time from vanilla's own formula, then drive the whole
      * thing ourselves.
      *
-     * <p>{@code handleBlockBreakAction} cannot be relied on for a clientless player: every
-     * guard passes and the call returns, yet the block is never removed - the destruction
-     * half of that path is bound up with the client acknowledgement we never send. So the
-     * timing is reproduced here (same speed / hardness / harvest divisors vanilla uses)
-     * and the actual removal still goes through {@code gameMode.destroyBlock}, which is
-     * what applies drops, tool rules and neighbour updates.</p>
+     * <p>The clientless miner tracks its own progress and removes blocks through
+     * {@code gameMode.destroyBlock}, preserving drops, tool rules and BreakEvent.
+     * That method does not include the packet handler's interaction checks, so
+     * mayInteract and LeftClickBlock must also be checked explicitly.</p>
      */
     public static String startBreak(ServerPlayer player, BlockPos pos, Direction face) {
         if (!withinReach(player, pos)) {
             return "too far away: " + round(Vec3.atCenterOf(pos).distanceTo(player.position()));
         }
         ServerLevel level = (ServerLevel) player.level();
+        if (!level.mayInteract(player, pos)) return "mining is not permitted at that position";
+        var click = CommonHooks.onLeftClickBlock(player, pos, face,
+                ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK);
+        if (click.isCanceled() || click.getUseItem() == TriState.FALSE) {
+            return "mining was denied by a block interaction hook";
+        }
         BlockState state = level.getBlockState(pos);
         if (state.isAir()) {
             return "that position is already air";
@@ -104,6 +106,14 @@ public final class AgentActions {
         }
     }
 
+    public static void cancelAll(MinecraftServer server) {
+        for (UUID id : new java.util.ArrayList<>(BREAKS.keySet())) {
+            ServerPlayer player = server.getPlayerList().getPlayer(id);
+            if (player != null) cancelBreak(player);
+        }
+        BREAKS.clear();
+    }
+
     /** Advance every pending break by one tick. Called from the server tick hook. */
     public static void tickBreaks(MinecraftServer server) {
         if (BREAKS.isEmpty()) {
@@ -117,7 +127,7 @@ public final class AgentActions {
                 continue;
             }
             ServerLevel level = (ServerLevel) player.level();
-            if (!withinReach(player, job.pos())) {
+            if (!withinReach(player, job.pos()) || !level.mayInteract(player, job.pos())) {
                 // Walked away mid-break: stop it, exactly as a client would when it
                 // sends ABORT, instead of destroying a block from across the map.
                 BREAKS.remove(entry.getKey());
@@ -136,7 +146,10 @@ public final class AgentActions {
             level.destroyBlockProgress(player.getId(), job.pos(), stage);
 
             if (elapsed >= job.totalTicks()) {
-                boolean removed = player.gameMode.destroyBlock(job.pos());
+                var click = CommonHooks.onLeftClickBlock(player, job.pos(), job.face(),
+                        ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK);
+                boolean removed = !click.isCanceled() && click.getUseItem() != TriState.FALSE
+                        && player.gameMode.destroyBlock(job.pos());
                 level.destroyBlockProgress(player.getId(), job.pos(), -1);
                 BREAKS.remove(entry.getKey());
                 if (!removed) {

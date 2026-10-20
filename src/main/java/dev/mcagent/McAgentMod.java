@@ -41,14 +41,20 @@ public final class McAgentMod {
 
         bus.addListener((ServerStoppingEvent event) -> {
             McAgent.WS.pushEvent("server_stopping", null);
-            GameBridge.detach();
+            try {
+                dev.mcagent.fakeplayer.AgentMovement.stopAll(event.getServer());
+                dev.mcagent.fakeplayer.AgentActions.cancelAll(event.getServer());
+                dev.mcagent.fakeplayer.FakePlayers.despawnAll(event.getServer());
+            } finally {
+                EditHistory.clear();
+                Watchers.clear();
+                Highlights.clear();
+                GameBridge.detach();
+            }
         });
 
         bus.addListener((ServerTickEvent.Post event) -> {
-            net.minecraft.server.MinecraftServer walking = GameBridge.server();
-            if (walking != null) {
-                dev.mcagent.fakeplayer.AgentMovement.tick(walking);
-            }
+            dev.mcagent.fakeplayer.AgentMovement.tick(event.getServer());
             TpsTracker.onTick();
             Highlights.tick(event.getServer());
             Watchers.tick(event.getServer());

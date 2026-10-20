@@ -1,5 +1,15 @@
 # mcagent 变更记录
 
+## 未发布 — 2026-10-21
+
+- 修复 `mc_fill` 的快照与命令执行维度不一致；`mc_undo` 补齐 chat / allowWrite 检查
+- WebSocket `exec` 与主线程命令执行都拒绝 chat 模式
+- chunked HTTP 请求体与 Content-Length 共用 8 MiB 上限，在分配内存前检查单块和累计大小
+- 停服清理 FakePlayer、动作、撤销记录、watcher 与 highlight，拒绝排队中的旧世界请求
+- 身体挖掘补齐 `mayInteract` 与 `LeftClickBlock` 取消检查
+- 移除重复的 `ServerPlayer.tick()`；世界负责该调用，Mod 只补连接缺失的 `doTick()`
+- 新增隔离传输回归与可选的真实游戏测试 Mod，后者只能操作存档副本
+
 ## v0.3 — 2026-10-20
 
 Agent 有了一具能真正干活的躯体，以及它需要的全部底层修复。
@@ -27,10 +37,10 @@ Agent 有了一具能真正干活的躯体，以及它需要的全部底层修�
 
 ### 这一版真正难的地方（每一条都是具体的坑）
 
-- 这具玩家**不被世界 tick**：`ServerPlayer.tick()` 才会跑 `gameMode.tick()`（挖掘进度），
-  而物理只在 `doTick() -> Player.tick()` 里。两条都由 `AgentMovement` 每帧手动驱动
-- 挖掘不能用原版包路径：`handleBlockBreakAction` 的守卫全部通过，方块却不动——
-  破坏那一半依赖客户端确认。改为按 `getDestroyProgress` 算时间 + `destroyBlock`
+- 客户端连接缺失的物理 tick 由 `AgentMovement` 补足；原先同时手动调用 `tick()` 的
+  解释有误，世界本身已调用 `ServerPlayer.tick()`，重复调用已在后续修复中移除
+- 挖掘按 `getDestroyProgress` 算时间，再调用 `destroyBlock`；后续审查发现后者不包含
+  包入口的全部交互检查，现已补齐 `mayInteract` 与 `LeftClickBlock`
 - 假连接的 `awaitingPositionFromClient` 永远等不到确认，`resetPosition()` 每 tick
   把身体拽回传送点，同时中断挖掘。传送后手动清空该状态
 - 离线玩家 UUID 要按 `OfflinePlayer:<name>` 现算，客户端才能在 `createSkinLookup` 里匹配

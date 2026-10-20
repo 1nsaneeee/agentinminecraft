@@ -49,6 +49,13 @@ cd E:\Minecraft\mcagent
 
 改完 mod **必须重启游戏**，FML 没有热重载。
 
+回归验证：`./tools/test.ps1` 独立验证 HTTP/WS，不连接游戏。`./tools/build-live-tests.ps1`
+构建可选的 `build/mcagent-qa.jar`；它只允许在目录名为 `mcagent-review-*` 的存档副本中
+运行 `/mcagentqa run`，下一 tick 执行后用 `/mcagentqa results` 查看维度填充/撤销、
+权限、挖掘 hooks 与世界切换清理的结果。
+`/mcagentqa ticks` 返回玩家每 tick 的实际计数；`/mcagentqa chat` 临时进入 chat 模式
+100 tick 后自动恢复，供 MCP/WS 拒绝路径验证。测试结束后移走 QA jar，再重启游戏。
+
 ## 配置
 
 `<game_dir>/config/mcagent.json`
