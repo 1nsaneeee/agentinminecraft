@@ -45,7 +45,13 @@ public final class AgentConfig {
     public String skinFile = "";
 
     /** Display name the agent speaks under, rendered as {@code <name> message}. */
-    /** Legacy name field. Read for migration, never written. */
+    /**
+     * The name used when the agent speaks without a body in the world.
+     *
+     * <p>Distinct from {@link #playerName} on purpose: that one names the player it
+     * spawns, and a real chat message takes its sender name from that player's profile.
+     * With nothing spawned there is no profile, so this stands in.</p>
+     */
     public String agentName = "Deepseek";
 
     private static AgentConfig instance = new AgentConfig();
@@ -75,7 +81,8 @@ public final class AgentConfig {
         out.add("enabled   = " + enabled + "    mode = " + AgentMode.id());
         out.add("host      = " + host + "    port = " + port);
         out.add("token     = " + shownToken + "  (masked)");
-        out.add("playerName = " + resolvedPlayerName());
+        out.add("playerName = " + resolvedPlayerName() + "    (the body)");
+        out.add("agentName  = " + speakName() + "    (when no body exists)");
         out.add("allowCommands = " + allowCommands + "    allowWrite = " + allowWrite);
         out.add("skinFile  = " + (skinFile == null || skinFile.isBlank() ? "(none)" : skinFile)
                 + "    skinModel = " + skinModel);
@@ -91,11 +98,11 @@ public final class AgentConfig {
     private static final java.util.List<String> SETTABLE_INT =
             java.util.List.of("maxOutputChars", "maxLogLines", "port");
     private static final java.util.List<String> SETTABLE_TEXT =
-            java.util.List.of("host", "playerName", "skinFile", "skinPlayer", "skinModel");
+            java.util.List.of("host", "playerName", "agentName", "skinFile", "skinPlayer", "skinModel");
 
     /** Keys this command accepts. Anything else is a file-only or startup-only setting. */
     public static final java.util.List<String> SETTABLE = java.util.List.of(
-            "allowCommands", "allowWrite", "playerName",
+            "allowCommands", "allowWrite", "playerName", "agentName",
             "skinFile", "skinModel", "skinPlayer", "greetOnJoin",
             "maxOutputChars", "maxLogLines",
             "host", "port", "enabled");
@@ -128,7 +135,7 @@ public final class AgentConfig {
 
         // Accept the obvious short forms; the canonical names are what the listing prints.
         key = switch (key) {
-            case "player", "name", "agentName" -> "playerName";
+            case "player", "name" -> "playerName";
             case "skin" -> "skinFile";
             case "write" -> "allowWrite";
             case "commands" -> "allowCommands";
@@ -185,6 +192,7 @@ public final class AgentConfig {
             case "allowWrite" -> c.allowWrite = parseBool(v, c.allowWrite);
             case "greetOnJoin" -> c.greetOnJoin = parseBool(v, c.greetOnJoin);
             case "playerName" -> c.playerName = v;
+            case "agentName" -> c.agentName = v;
             case "skinFile" -> c.skinFile = v;
             case "skinModel" -> {
                 String m = v.toLowerCase(java.util.Locale.ROOT);
@@ -231,6 +239,14 @@ public final class AgentConfig {
         }
     }
 
+
+    /** The name to sign a fallback line with: agentName, else the body's name. */
+    public String speakName() {
+        if (agentName != null && !agentName.isBlank()) {
+            return agentName.trim();
+        }
+        return resolvedPlayerName();
+    }
 
     /** The configured player name, falling back to the display name. */
     public String resolvedPlayerName() {
@@ -364,6 +380,7 @@ public final class AgentConfig {
             case "maxOutputChars" -> o.addProperty(key, c.maxOutputChars);
             case "maxLogLines" -> o.addProperty(key, c.maxLogLines);
             case "playerName" -> o.addProperty(key, c.playerName);
+            case "agentName" -> o.addProperty(key, c.agentName);
             case "skinFile" -> o.addProperty(key, c.skinFile);
             case "skinPlayer" -> o.addProperty(key, c.skinPlayer);
             case "skinModel" -> o.addProperty(key, c.skinModel);

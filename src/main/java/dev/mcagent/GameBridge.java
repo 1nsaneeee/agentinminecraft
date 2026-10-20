@@ -243,7 +243,7 @@ public final class GameBridge {
      * when no agent body is spawned.
      */
     private static Component formatAgentLine(String text) {
-        return Component.literal("<" + AgentConfig.get().resolvedPlayerName() + "> ")
+        return Component.literal("<" + AgentConfig.get().speakName() + "> ")
                 .withStyle(net.minecraft.ChatFormatting.AQUA)
                 .append(Component.literal(text));
     }
