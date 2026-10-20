@@ -28,14 +28,14 @@
 <p align="center">
   <img src="./assets/readme/screenshots/03-mining.png" width="49%"
        alt="挖掘中：方块表面出现裂纹进度">
-  <img src="./assets/readme/screenshots/04-chat-mode.png" width="49%"
-       alt="切到 chat 模式后 agent 说的第一句话">
+  <img src="./assets/readme/screenshots/04-chat.png" width="49%"
+       alt="chat 模式下和玩家的整段对话：打招呼、吐槽、被问反骨">
 </p>
 
 左上：它是一具真的玩家，有皮肤、有名字牌、手里拿着工具。
 右上：不是聊天框——它就站在你旁边。
 左下：挖方块时有真实进度，不是瞬间消失。
-右下：`/agent chat` 切换后，它会开口说话。
+右下：`/agent chat` 之后，它会开口、会贫嘴、会顶一句回来。
 
 ## 特色功能
 

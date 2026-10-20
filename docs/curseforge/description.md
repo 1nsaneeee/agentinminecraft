@@ -13,12 +13,12 @@
 ![Agent 和玩家并排站着](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/02-together.png)
 
 ![挖掘进度](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/03-mining.png)
-![chat 模式](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/04-chat-mode.png)
+![chat 模式](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/04-chat.png)
 
 左上：一具真的玩家，有皮肤、有名字牌、手里拿着工具。
 右上：不是聊天框——它站在你旁边。
 左下：挖方块有真实进度，不是瞬间消失。
-右下：`/agent chat` 之后，它会开口说话。
+右下：`/agent chat` 之后，它会开口、会贫嘴、会顶一句回来。
 
 ## 特色功能
 
