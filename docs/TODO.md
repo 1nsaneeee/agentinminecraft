@@ -4,6 +4,28 @@
 
 ## 代码
 
+### 挖掘没有尊重游戏模式
+
+**现象**：假玩家在**创造模式**下挖方块仍然按计时走——铁斧挖木板 10 tick、铁镐 60 tick，
+而原版创造模式是**瞬间破坏**。这是在游戏里实测时被发现的（"露馅"）。
+
+**根因**：`AgentActions.startBreak` 自己算 `getDestroyProgress` 的时长，完全没有看
+`player.gameMode.isCreative()`。生存和创造走了同一条路径。
+
+**修法**：
+
+```java
+if (player.gameMode.isCreative()) {
+    return player.gameMode.destroyBlock(pos) ? "broke instantly" : "refused";
+}
+// 生存才进计时队列
+```
+
+**连带影响**：这具身体默认跟随世界的游戏模式（世界建在创造里，身体也就是创造）。
+所以做"真实挖掘"的演示或截图时，得先 `/gamemode survival`，否则那个时长不成立。
+
+---
+
 ### Agent 视角相机（POV）
 
 **为什么想要**：`mc_screenshot` 抓的是本机客户端画面。Agent 的身体是纯服务端玩家，没有客户端、没有渲染循环，所以它**不存在视角**——你看到的它是你的客户端渲染的。
