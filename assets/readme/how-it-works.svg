@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="t d">
+  <title id="t">Agent In Minecraft 的工作方式</title>
+  <desc id="d">三个部分：左侧是 DeepSeek Harness 里的 agent，中间是 mod 提供的 MCP 与 WebSocket 桥接，右侧是游戏进程里的世界读取与 agent 的身体。桥接只绑回环并要求 token。</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7FC4E8"/>
+    </marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1522"/>
+      <stop offset="1" stop-color="#0E1B2C"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <g opacity="0.32" stroke="#7FC4E8" stroke-width="1">
+    <path d="M0 105 H1200 M0 210 H1200 M0 315 H1200"/>
+    <path d="M300 0 V420 M600 0 V420 M900 0 V420" opacity="0.5"/>
+  </g>
+
+  <text x="48" y="52" font-family="ui-monospace,Consolas,monospace" font-size="17" letter-spacing="2.2" fill="#7FC4E8" opacity="0.9">HOW IT WORKS</text>
+  <text x="48" y="88" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="28" font-weight="700" fill="#E6F1FA">两条通道，一具身体</text>
+
+  <!-- left: harness -->
+  <g>
+    <rect x="40" y="122" width="330" height="196" rx="18" fill="#111F31" stroke="#2C4A66" stroke-width="1.5"/>
+    <text x="64" y="158" font-family="ui-monospace,Consolas,monospace" font-size="15" letter-spacing="1.6" fill="#7A9CBB">AGENT SIDE</text>
+    <text x="64" y="196" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#E6F1FA">DeepSeek Harness</text>
+    <text x="64" y="230" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="19" fill="#A8CBE4">读世界、下指令、被游戏叫醒</text>
+    <rect x="64" y="250" width="150" height="34" rx="9" fill="rgba(127,196,232,.08)" stroke="rgba(127,196,232,.28)"/>
+    <text x="80" y="273" font-family="ui-monospace,Consolas,monospace" font-size="15" fill="#9FC0D8">plugin · dsh-mc-chat</text>
+  </g>
+
+  <!-- middle: bridge -->
+  <g>
+    <rect x="430" y="122" width="340" height="196" rx="18" fill="#0F2134" stroke="#7FC4E8" stroke-width="2"/>
+    <text x="454" y="158" font-family="ui-monospace,Consolas,monospace" font-size="15" letter-spacing="1.6" fill="#F2A24B">BRIDGE · IN GAME PROCESS</text>
+    <text x="454" y="196" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#F4FAFF">Agent In Minecraft</text>
+    <text x="454" y="230" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="19" fill="#A8CBE4">MCP · 35 个工具</text>
+    <text x="454" y="256" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="19" fill="#A8CBE4">WebSocket · 聊天与事件</text>
+    <text x="454" y="288" font-family="ui-monospace,Consolas,monospace" font-size="16" fill="#F2A24B">127.0.0.1 · Bearer token</text>
+  </g>
+
+  <!-- right: game -->
+  <g>
+    <rect x="830" y="122" width="330" height="196" rx="18" fill="#111F31" stroke="#2C4A66" stroke-width="1.5"/>
+    <text x="854" y="158" font-family="ui-monospace,Consolas,monospace" font-size="15" letter-spacing="1.6" fill="#7A9CBB">GAME SIDE</text>
+    <text x="854" y="196" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="24" font-weight="700" fill="#E6F1FA">你的世界</text>
+    <text x="854" y="230" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="19" fill="#A8CBE4">服务端主线程读写方块</text>
+    <rect x="854" y="248" width="132" height="34" rx="9" fill="rgba(242,162,75,.10)" stroke="rgba(242,162,75,.35)"/>
+    <text x="868" y="271" font-family="ui-monospace,Consolas,monospace" font-size="15" fill="#F2A24B">Agent 的身体</text>
+    <text x="1000" y="271" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="16" fill="#7A9CBB">真实玩家</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#7FC4E8" stroke-width="2" fill="none">
+    <path d="M370 190 H430" marker-end="url(#arrow)"/>
+    <path d="M770 190 H830" marker-end="url(#arrow)"/>
+    <path d="M770 250 H700" opacity="0"/>
+  </g>
+  <g fill="#7A9CBB" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="16">
+    <text x="374" y="180">MCP</text>
+    <text x="776" y="180">动作</text>
+  </g>
+
+  <text x="48" y="386" font-family="-apple-system,Segoe UI,Microsoft YaHei,sans-serif" font-size="18" fill="#7A9CBB">所有世界读写都在服务端主线程执行；HTTP 线程不直接碰世界数据。</text>
+</svg>

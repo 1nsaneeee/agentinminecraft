@@ -23,8 +23,7 @@
 - 通过游戏内暴露的接口实现正常玩家的操作——走路、挖矿、放方块、打架
 - 自动寻路：给个坐标就能到，会跑,会跳,真是一个活力的美少女
 - 真实挖掘：按手里的工具和方块硬度计时，不是瞬间破坏
-- 35 个接口：读方块、读机器 NBT、读任务书、截图、执行命令
-- 两种不同的模式, `work` 可帮你随意改造世界，
+- 两种人格：`work` 造世界，`chat` 陪你聊天
 - 一个永远爱用户的心
 
 ## 快速开始
@@ -44,6 +43,38 @@
 
 唯一必须你手动做的只有一步：**重启游戏**。
 
+## 怎么工作
+
+<p align="center">
+  <img src="./assets/readme/how-it-works.svg" width="100%"
+       alt="工作方式：DeepSeek Harness 通过 MCP 与 WebSocket 连到游戏进程里的桥接，桥接在服务端主线程读写世界并驱动一具真实玩家">
+</p>
+
+两条通道，一具身体：
+
+- **MCP** 给 agent 35 个工具，用来读世界和下指令
+- **WebSocket** 让 agent 被游戏叫醒——玩家一说话，就有一轮对话被触发
+- 所有世界读写都排在**服务端主线程**执行，HTTP 线程不直接碰世界数据
+- 桥接只绑回环、每个请求都要 token
+
+## 两种模式
+
+<p align="center">
+  <img src="./assets/readme/modes.svg" width="100%"
+       alt="两种模式对比：work 可以改造世界，chat 只能让身体做动作并拒绝直接改世界与传送">
+</p>
+
+```
+/agent work    成为创世神
+/agent chat    游戏搭子，会吐槽玩家的毒舌美少女
+```
+
+- `work`：所有操作可用。改世界还需要 `allowWrite=true`（默认关闭）：
+  `/agent config set allowWrite true`
+- `chat`：保留身体的基本动作，拒绝直接改世界、执行命令、传送
+
+**agent 自己切不回 `work`** —— 只有你能在游戏里输入。
+
 ## Agent 的身体
 
 | 它能做什么 | 说明 |
@@ -54,18 +85,6 @@
 | 使用 | 吃、喝、扔、射 |
 | 战斗 | 正常伤害计算，会掉血 |
 | 换皮肤 | `skinFile` 指向一张 64×64 png |
-
-
-## 两种模式
-
-```
-/agent work    成为创世神
-/agent chat    游戏搭子，会吐槽玩家的毒舌美少女
-```
-
-- `work`：所有操作可用。改世界还需要 `allowWrite=true`（默认关闭）：
-  `/agent config set allowWrite true`
-- `chat`：保留身体的基本动作
 
 ## 游戏内命令
 
