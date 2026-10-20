@@ -1,5 +1,49 @@
 # mcagent 变更记录
 
+## v0.3 — 2026-10-20
+
+Agent 有了一具能真正干活的躯体，以及它需要的全部底层修复。
+
+工具（23 → 35）：
+
+- `mc_player_spawn` / `despawn` / `list` / `look` / `hold`：生成一具无客户端的
+  `ServerPlayer`，真出现在玩家列表、真拿物品、真占一块地
+- `mc_player_walk` / `halt`：走。输入 `xxa/zza` + 跳跃位，物理交给原版
+- `mc_player_teleport`：传送。**开发工具，chat 模式下拒绝**（名字与 `walk` 刻意分开）
+- `mc_player_break` / `place` / `use` / `attack`：真挖、真放、真用、真打
+
+导航：`AgentNav` 在可站立格子上做带跳的 A*（走 / 上台阶 / 掉落 / 跨 2~3 格坑），
+`AgentMovement` 逐跳执行，跳的边提前起跳。实测三段台阶 + 两处坑规划为
+`8 hops, 2 jumps`，落在平台 `y=-60` 并停住。
+
+模式：`/agent work|chat`。chat 保留身体动作，拒绝直接改世界
+（`mc_set_block` / `mc_fill` / `mc_command` / `mc_undo`）与传送，**在工具入口强制**。
+
+配置：`/agent config`、`config set <key> <value>`、`config reload`。
+`set` 只写那一个键（增量），整体保存先读盘再合并；空值直接拒绝。
+
+皮肤：`skinPlayer` 支持名字列表；`playerName` 为空时回落 `agentName`；
+空白配置会在三处被拦下，不再静默失效。
+
+### 这一版真正难的地方（每一条都是具体的坑）
+
+- 这具玩家**不被世界 tick**：`ServerPlayer.tick()` 才会跑 `gameMode.tick()`（挖掘进度），
+  而物理只在 `doTick() -> Player.tick()` 里。两条都由 `AgentMovement` 每帧手动驱动
+- 挖掘不能用原版包路径：`handleBlockBreakAction` 的守卫全部通过，方块却不动——
+  破坏那一半依赖客户端确认。改为按 `getDestroyProgress` 算时间 + `destroyBlock`
+- 假连接的 `awaitingPositionFromClient` 永远等不到确认，`resetPosition()` 每 tick
+  把身体拽回传送点，同时中断挖掘。传送后手动清空该状态
+- 离线玩家 UUID 要按 `OfflinePlayer:<name>` 现算，客户端才能在 `createSkinLookup` 里匹配
+- 第二层皮肤需要 `modelCustomisation = 0x7F`，`createInformation.createDefault()` 给的是 0
+- 攻击曾经误伤玩家：`mc_player_attack` 按"最近活体"选目标，现在排除玩家
+
+### 其它
+
+- `mc_player_move` 更名为 `mc_player_teleport`，名字与实际行为一致
+- 删除三处死代码（`isBreaking` / `abortBreak` / `holdsPlaceable`），
+  `cancelBreak` 接入"走远则中止挖掘"
+- 仓库开始用 git 管理，`.gitattributes` 锁 LF，避免 checkout 翻掉全部行尾
+
 ## v0.2 — 2026-10-20
 
 新工具（9 个，总数 14 → 23）：
