@@ -28,6 +28,7 @@
 .PARAMETER DryRun
     Print the metadata that would be sent and exit without calling the API.
 #>
+#Requires -Version 7.0
 param(
     [string]$Jar,
     [string]$Changelog,
@@ -46,7 +47,7 @@ if (-not $version) { throw 'could not read $version from build.ps1' }
 if (-not $Jar) { $Jar = Join-Path $root "build\mcagent-$version.jar" }
 if (-not (Test-Path $Jar)) { throw "jar not found: $Jar (run .\build.ps1 -NoInstall first)" }
 
-if (-not $Changelog) { $Changelog = Join-Path $root 'dist\curseforge\changelog.md' }
+if (-not $Changelog) { $Changelog = Join-Path $root 'docs\curseforge\changelog.md' }
 $changelogText = if (Test-Path $Changelog) { Get-Content $Changelog -Raw } else { "See the release notes on GitHub." }
 
 $metadata = [ordered]@{
