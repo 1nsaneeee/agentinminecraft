@@ -17,6 +17,16 @@
 - 强大的 work 模式，随心所欲地改造世界
 - 一个永远爱用户的心
 
+## 快速开始
+
+**懒人路线**：把下面这句发给你的 AI agent，它会自己下载、安装、配置：
+
+> 依照 https://github.com/1nsaneeee/agentinminecraft/blob/main/docs/AI-INSTALL.md
+> 执行本 Mod 的安装步骤。遇到不确定的路径先问我，不要覆盖已有配置。
+
+**手动路线**：把 jar 放进 `mods/` → 启动游戏进一个世界 → 打开
+`http://127.0.0.1:38121/health` 看到 `{"ok":true,...}` 即成功。
+
 ## 这是什么
 
 把一个正在运行的 Minecraft 客户端/整合包，变成 AI agent 可以直接操作的进程。

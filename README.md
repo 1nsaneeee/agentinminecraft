@@ -23,27 +23,18 @@
 
 ### 路线一：全权交给 AI（懒人）
 
-装好 **DeepSeek Harness**，把下面这段整个粘给它的 agent，剩下的它会自己做完。
+装好 **DeepSeek Harness**，然后把下面这句话连同链接一起发给它的 agent：
 
 ```text
-帮我装 Agent In Minecraft 这个 Minecraft mod，并按下面顺序来：
-
-1. 从 https://github.com/1nsaneeee/agentinminecraft/releases/latest 下载
-   AgentInMinecraft-*.zip，解压到临时目录。
-2. 找到我当前在玩的 Minecraft 实例目录（含 mods/ 的那个），把我的
-   AgentInMinecraft-*.jar 放进 mods/。如果 mods/ 里已经有旧的 mcagent-*.jar，
-   删掉它——两个同名 mod 会抢同一个端口。
-3. 把压缩包里的 harness/dsh-mc-chat 整个复制到 ~/.dsh/plugins/dsh-mc-chat，
-   并在 ~/.dsh/profiles/<我的 profile>/node_modules/ 下建一个指向它的目录链接。
-4. 把 harness/profile-patch-snippet.yml 的内容追加到
-   ~/.dsh/profiles/<我的 profile>/cordis.patch.yml。
-5. 把 harness/skills/minecraft-agent-bridge 复制到 ~/.dsh/skills/。
-6. 做完告诉我：还需要我重启游戏吗？重启后你用什么命令验证桥接起来了？
-
-不要改我的存档，不要删我的 mods/ 里别的东西，读不到路径就问我。
+依照 https://github.com/1nsaneeee/agentinminecraft/blob/main/docs/AI-INSTALL.md
+执行本 Mod 的安装步骤。遇到不确定的路径先问我，不要覆盖已有配置。
 ```
 
-它会自己下载、自己放文件、自己改配置。**唯一必须你手动做的只有一步：重启游戏。**
+它会自己下载、自己放文件、自己改 profile、自己装 skill，最后告诉你还要不要重启。
+步骤和约束都写在 [docs/AI-INSTALL.md](docs/AI-INSTALL.md) 里——那份文件本身就是一段
+可执行提示词，你不需要自己抄任何路径。
+
+**唯一必须你手动做的只有一步：重启游戏。**
 
 ### 路线二：自己装（三步）
 
