@@ -1,5 +1,11 @@
 # mcagent — Minecraft Agent Bridge
 
+> **⚠ 目前只支持 DeepSeek Harness。**
+>
+> mod 本身暴露的是标准 MCP + WebSocket，任何 MCP 客户端都能连；
+> 但"在游戏里说话就唤醒 agent"、`/agent` 的模式与会话转发、chat 模式的语气注入，
+> 这些**配套设施只针对 DeepSeek Harness 实现**。换别的 harness 需要自己写对接层。
+
 把一个正在运行的 Minecraft 客户端/整合包，变成 AI agent 可以直接操作的进程：
 MCP（Model Context Protocol）服务器 + WebSocket 实时通道，全部跑在游戏进程内。
 
