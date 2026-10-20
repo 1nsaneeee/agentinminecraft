@@ -3,7 +3,12 @@
 # No Gradle, no network: every jar below is already on disk because the game runs from it.
 param(
     [switch]$NoInstall,
-    [string]$Instance = 'E:\Minecraft\.minecraft\versions\1.21.1(1)\.minecraft'
+    [string]$Instance = 'E:\Minecraft\.minecraft\versions\1.21.1(1)\.minecraft',
+    # Where to find optional integration jars (FTB Quests and friends) for the
+    # compile classpath. Kept separate from -Instance on purpose: installing into a
+    # clean instance must not change what the build can compile against, otherwise
+    # a pack without FTB fails to build at all.
+    [string]$Libs = 'E:\Minecraft\.minecraft\versions\1.21.1(1)\.minecraft'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,9 +43,12 @@ foreach ($jar in $required) {
 # The classes are only touched reflectively at runtime, so a pack without these
 # mods still loads fine.
 foreach ($pattern in @('ftb-quests-*.jar', 'ftb-library-*.jar', 'ftb-teams-*.jar')) {
-    $hit = Get-ChildItem (Join-Path $Instance 'mods') -Filter $pattern -ErrorAction SilentlyContinue |
+    $hit = Get-ChildItem (Join-Path $Libs 'mods') -Filter $pattern -ErrorAction SilentlyContinue |
         Select-Object -First 1
-    if ($hit) { $required += $hit.FullName }
+    if (-not $hit) {
+        throw "optional integration jar '$pattern' not found in $Libs\mods - pass -Libs <instance with that mod>"
+    }
+    $required += $hit.FullName
 }
 
 # Connection extends io.netty SimpleChannelInboundHandler, so the netty jars have to be
