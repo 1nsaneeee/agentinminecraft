@@ -231,6 +231,14 @@ public final class AgentMovement {
         }
         player.setJumping(jump);
 
+        // The jumping flag alone does not lift this body: the probe showed jump=true,
+        // onGround=true and vy unchanged, tick after tick. Applying the impulse directly
+        // is what actually leaves the ground; the flag stays set for water, where it is
+        // the ascend control rather than an impulse.
+        if (jump && !player.isInWater() && player.onGround()) {
+            player.jumpFromGround();
+        }
+
         // One line every five ticks while a step is being attempted: the whole reason the
         // body could not climb was invisible from the outside, and guessing at it cost a
         // restart each time.
@@ -281,6 +289,9 @@ public final class AgentMovement {
             }
         }
         player.setJumping(jump);
+        if (jump && !player.isInWater() && player.onGround()) {
+            player.jumpFromGround();
+        }
         trackProgress(player, walk);
         return true;
     }
