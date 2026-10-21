@@ -1,0 +1,1 @@
+把 AI agent 接进 Minecraft 的桥：启动本地 MCP + WebSocket 服务，并可为 agent 生成一具没有客户端连接、但服务端视为正常玩家的身体。支持读取世界、执行命令、行走寻路、挖掘建造、战斗与跟随。暂只提供 DeepSeek Harness 的完整配套。
