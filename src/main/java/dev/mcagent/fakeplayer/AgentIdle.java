@@ -23,8 +23,8 @@ import net.minecraft.world.phys.Vec3;
 public final class AgentIdle {
 
     /** Gap between two gestures, in ticks. Calm, but not statuesque. */
-    private static final int MIN_GAP = 45;
-    private static final int MAX_GAP = 130;
+    private static final int MIN_GAP = 100;
+    private static final int MAX_GAP = 280;
 
     /** Degrees the head may turn per tick while drifting toward a new angle. */
     private static final float TURN_PER_TICK = 7.0F;

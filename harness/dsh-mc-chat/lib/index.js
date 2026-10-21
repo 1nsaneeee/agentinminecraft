@@ -47,6 +47,9 @@ export function apply(ctx, config) {
 
   // 模式与会话是插件内存状态：DSH 重启就回到 work + 默认会话。
   const state = { mode: 'work', activeId: null }
+  // 主动说话的节流：玩家刚说过话就别插嘴，自己刚说过也别连着说。
+  let lastPlayerAt = 0
+  let lastNudgeAt = 0
 
   const log = (msg) => ctx.logger?.info?.(`[mc-chat] ${msg}`)
   // 取尾部而不是开头：harness 的会话 id 形如 session-<uuid>，前 8 位永远是
@@ -259,6 +262,7 @@ export function apply(ctx, config) {
   }
 
   function deliver(player, text) {
+    lastPlayerAt = Date.now()
     const agent = activeAgent()
     if (!agent) {
       log('没有可投递的会话')
@@ -280,6 +284,31 @@ export function apply(ctx, config) {
       }))
     } catch (error) {
       log(`投递失败：${error}`)
+    }
+  }
+
+  // chat 模式下主动说点什么。不给玩家的话加引号，让它知道这不是有人在问。
+  const NUDGE_IDLE_MS = 180_000      // 玩家安静 3 分钟后才考虑开口
+  const NUDGE_GAP_MS = 240_000       // 自己两次主动说话至少隔 4 分钟
+
+  function maybeNudge() {
+    if (closed || state.mode !== 'chat') return
+    const now = Date.now()
+    if (now - lastPlayerAt < NUDGE_IDLE_MS) return
+    if (now - lastNudgeAt < NUDGE_GAP_MS) return
+    const agent = activeAgent()
+    if (!agent) return
+    lastNudgeAt = now
+    try {
+      agent.followup(createUserMessage({
+        content: [{ type: 'text', text:
+          '（没有人在问你。你在游戏里闲着，玩家就在附近。' +
+          '主动分享一件和眼前场景有关的小事——一句话，别复述之前说过的，别问"需要我做什么"。）' }],
+        source: { kind: 'user' },
+      }))
+      log('主动分享：已推送一条提示')
+    } catch (error) {
+      log(`主动分享失败：${error}`)
     }
   }
 
@@ -336,9 +365,12 @@ export function apply(ctx, config) {
 
   ctx.effect(() => {
     connect()
+    // 每分钟看一眼要不要主动说话；节流都在 maybeNudge 里。
+    const nudgeTimer = setInterval(maybeNudge, 60_000)
     return () => {
       closed = true
       clearTimeout(timer)
+      clearInterval(nudgeTimer)
       try {
         socket?.close()
       } catch {}
