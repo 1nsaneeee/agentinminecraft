@@ -1,66 +1,75 @@
-![Agent In Minecraft](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/hero.webp)
+![Agent In Your World](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/hero.webp)
 
-# Agent In Minecraft
+# Agent In Your World
 
-**让 AI 在你的世界里拥有一具真的身体。**
+**Give an AI agent a real player body inside your Minecraft world.**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Minecraft-1.21.1-3C8527?style=flat-square&amp;labelColor=0B1522" alt="Minecraft 1.21.1">
-  <img src="https://img.shields.io/badge/NeoForge-21.1.x-F16436?style=flat-square&amp;labelColor=0B1522" alt="NeoForge 21.1.x">
-  <img src="https://img.shields.io/badge/License-MIT-4C9AFF?style=flat-square&amp;labelColor=0B1522" alt="MIT">
-  <img src="https://img.shields.io/badge/Harness-DeepSeek_only-F2A24B?style=flat-square&amp;labelColor=0B1522" alt="DeepSeek Harness only">
-</p>
+> ⚠ **DeepSeek Harness only, for now.** The mod itself speaks plain MCP + WebSocket, so any MCP client can connect. Waking it from in-game chat, the `/agent` modes and session forwarding, and the chat-mode personality are implemented against DeepSeek Harness. Other harnesses need their own adapter.
 
-> ⚠ **目前只支持 DeepSeek Harness。** mod 本身是标准 MCP + WebSocket，任何 MCP 客户端都能连；
-> 但游戏内唤醒、`/agent` 的模式与会话转发、chat 模式的语气注入，只针对 DeepSeek Harness 实现。
+## Screenshots
 
-## 实机
+![Close-up of the agent body](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/01-body.png)
+![The agent standing next to the player](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/02-together.png)
+![Mining progress on a block](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/03-mining.png)
+![A full conversation in chat mode](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/04-chat.png)
 
-![Agent 的近景](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/01-body.png)
-![Agent 和玩家并排站着](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/02-together.png)
+Top left: a real player entity - skin, name tag, tool in hand.
+Top right: not a chat window - it stands beside you.
+Bottom left: blocks break over time, not instantly.
+Bottom right: after `/agent chat` it talks, jokes, and answers back.
 
-![挖掘进度](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/03-mining.png)
-![chat 模式](https://raw.githubusercontent.com/1nsaneeee/agentinminecraft/main/assets/readme/screenshots/04-chat.png)
+## Features
 
-左上：一具真的玩家，有皮肤、有名字牌、手里拿着工具。
-右上：不是聊天框——它站在你旁边。
-左下：挖方块有真实进度，不是瞬间消失。
-右下：`/agent chat` 之后，它会开口、会贫嘴、会顶一句回来。
+- Listens to in-game chat live and answers in the same chat
+- Acts through the game's own interfaces, not by editing data behind its back
+- Pathfinding: give it coordinates and it walks there - around obstacles, over gaps, up steps
+- Real mining time, based on the tool and the block's hardness
+- Two personalities: `work` builds, `chat` keeps you company
+- A body that fidgets, glances around, and turns to look at you when you come close
 
-## 特色功能
-
-- 实时监听玩家对话，实时做出响应
-- 用游戏内真实接口操作，不是直接改数据的旁路
-- 自动寻路：给个坐标就能到，会绕路、会跳坑、会爬台阶
-- 真实挖掘：按手里的工具和方块硬度计时，不是瞬间破坏
-- 两种人格：`work` 造世界，`chat` 陪你聊天
-- 一个永远爱用户的心
-
-## 两种模式
+## Modes
 
 ```
-/agent work    成为创世神
-/agent chat    游戏搭子，会吐槽玩家的毒舌美少女
+/agent work    build and break, all tools available
+/agent chat    a companion that talks back; direct world edits are refused
 ```
 
-`chat` 模式保留身体的动作，但拒绝直接改世界。**agent 自己切不回 `work`** —— 只有你能在游戏里输入。
+`chat` keeps the body's normal movement but refuses to edit the world, run commands, or teleport.
+**The agent cannot switch itself back to `work`** - only you can, from in-game chat.
 
-## 换皮肤
+## Skins
 
-**mod 不自带皮肤**，所以第一次生成的身体是默认皮肤（Steve / Alex）——不是 bug。
+**No skin ships with the mod**, so a fresh body uses the default Steve/Alex look.
 
-把一张 **64×64 的皮肤 png** 放进游戏目录，然后：
+Drop a skin png into the game directory and point the config at it:
 
 ```
 /agent config set skinFile config/mcagent/skin.png
 ```
 
-再重新生成身体就换上了。皮肤是**客户端行为**：只有装了同一个 mod 的客户端才看得到。
+Then let your AI respawn the body. Related fields: `skinFile` (the file), `skinPlayer` (which names wear it, blank = follow `playerName`), `skinModel` (`auto` / `wide` / `slim`).
 
-## 安装
+## Install
 
-把 jar 放进 `mods/`，重启游戏。详细步骤、配置、源码与全部文档：
+Drop the jar into `mods/` and restart the game. Full instructions, configuration, source and docs:
 
 **https://github.com/1nsaneeee/agentinminecraft**
 
-需要 Minecraft **1.21.1** + NeoForge **21.1.x** · Client and Server
+Requires Minecraft **1.21.1** + NeoForge **21.1.x** · Client and Server
+
+---
+
+## 中文
+
+**让 AI 在你的世界里拥有一具真的身体。**
+
+同一段说明的中文版，全文见 [GitHub](https://github.com/1nsaneeee/agentinminecraft/blob/main/README.md)。
+
+- 实时监听游戏内聊天并回应
+- 通过游戏自身接口操作，不走改数据的旁路
+- 给坐标就能走过去：会绕路、会跳坑、会爬台阶
+- 按工具与方块硬度计时，不是瞬间破坏
+- 两种模式：`work` 造世界，`chat` 陪你聊天
+- 闲下来会东张西望、会转过头看你
+
+安装：把 jar 放进 `mods/` 重启游戏。需要 Minecraft **1.21.1** + NeoForge **21.1.x**。

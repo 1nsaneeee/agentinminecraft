@@ -1,0 +1,1 @@
+Give an AI agent a real player body in Minecraft: it walks, mines, builds, fights and answers you in chat. Exposes standard MCP + WebSocket; currently wired for DeepSeek Harness.
