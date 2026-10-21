@@ -1,3 +1,5 @@
+> 英文版（CurseForge 用这个）：[changelog.en.md](changelog.en.md)
+
 ## 0.3.2 — 跟随、递东西，以及不再建高地板
 
 ### 新增工具（35 → 39）
