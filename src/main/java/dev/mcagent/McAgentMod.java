@@ -59,6 +59,8 @@ public final class McAgentMod {
 
         bus.addListener((ServerTickEvent.Post event) -> {
             dev.mcagent.fakeplayer.AgentMovement.tick(event.getServer());
+                // Idle fidget only fills the gaps: movement and actions win.
+                dev.mcagent.fakeplayer.AgentIdle.tick(event.getServer());
             TpsTracker.onTick();
             Highlights.tick(event.getServer());
             Watchers.tick(event.getServer());

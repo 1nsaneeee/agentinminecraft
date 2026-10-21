@@ -128,6 +128,11 @@ public final class FakePlayers {
         }
     }
 
+    /** Every body that is currently in the world. */
+    public static synchronized List<ServerPlayer> all() {
+        return new ArrayList<>(LIVE.values());
+    }
+
     public static synchronized List<String> names() {
         return new ArrayList<>(LIVE.keySet());
     }

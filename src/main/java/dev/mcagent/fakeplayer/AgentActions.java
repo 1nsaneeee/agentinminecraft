@@ -99,6 +99,11 @@ public final class AgentActions {
     }
 
 
+    /** True while a break job is in flight - used by the idle layer to stay out of the way. */
+    public static boolean isBreaking(ServerPlayer player) {
+        return BREAKS.containsKey(player.getUUID());
+    }
+
     public static void cancelBreak(ServerPlayer player) {
         BreakJob job = BREAKS.remove(player.getUUID());
         if (job != null) {
