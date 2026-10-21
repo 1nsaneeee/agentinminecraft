@@ -210,8 +210,12 @@ public final class AgentMovement {
                 // jump started at the edge has no run-up and falls short.
                 jump = horizontal < 3.4;
                 walk.jumpTicks = jump ? 3 : 0;
-            } else if (player.horizontalCollision) {
-                jump = true;               // a step the path thought was a step
+            } else if (player.horizontalCollision
+                    || (dy > 0.5 && horizontal < 1.6)) {
+                // A step the path called a step is a full block: 0.6 of automatic step
+                // height is not enough, so jump - and jump before the body is already
+                // pressed against the block, or it loses the run-up and stalls there.
+                jump = true;
                 walk.jumpTicks = 2;
             }
         } else if (walk.jumpTicks > 0) {

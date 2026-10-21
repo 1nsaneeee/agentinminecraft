@@ -36,6 +36,8 @@ public final class AgentNav {
 
     private record Node(BlockPos pos, double g, double f) {}
 
+    /** The four corner-to-corner moves. A staircase built this way is one block apart. */
+    private static final int[][] DIAGONAL = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
     private static final Direction[] HORIZONTAL = {
             Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST
     };
@@ -108,7 +110,7 @@ public final class AgentNav {
 
     /** Every place reachable from {@code at} in one move. */
     private static List<Hop> neighbours(ServerLevel level, BlockPos at) {
-        List<Hop> out = new ArrayList<>(8);
+        List<Hop> out = new ArrayList<>(16);
         boolean headroom = passable(level, at.above(2));
 
         for (Direction d : HORIZONTAL) {
@@ -158,6 +160,33 @@ public final class AgentNav {
                             out.add(new Hop(landing, true));
                         }
                     }
+                }
+            }
+        }
+
+        // Diagonals. Stairs built corner-to-corner are a single block apart in the game's
+        // own sense, and without these edges a staircase like that is simply unreachable -
+        // the agent used to fall back to steering and shove itself into the first step.
+        for (int[] off : DIAGONAL) {
+            int x = at.getX() + off[0];
+            int z = at.getZ() + off[1];
+            // The game refuses to squeeze through a diagonal corner: both side cells have
+            // to be open, or the body clips the block it is turning past.
+            if (!passable(level, new BlockPos(at.getX() + off[0], at.getY(), at.getZ()))
+                    || !passable(level, new BlockPos(at.getX(), at.getY(), at.getZ() + off[1]))) {
+                continue;
+            }
+            if (standable(level, new BlockPos(x, at.getY(), z))) {
+                out.add(new Hop(new BlockPos(x, at.getY(), z), false));
+            }
+            if (headroom && standable(level, new BlockPos(x, at.getY() + 1, z))) {
+                out.add(new Hop(new BlockPos(x, at.getY() + 1, z), false));
+            }
+            for (int dy = 1; dy <= 3; dy++) {
+                BlockPos down = new BlockPos(x, at.getY() - dy, z);
+                if (standable(level, down)) {
+                    out.add(new Hop(down, false));
+                    break;
                 }
             }
         }
