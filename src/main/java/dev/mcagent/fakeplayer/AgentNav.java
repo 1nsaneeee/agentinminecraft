@@ -41,8 +41,11 @@ public final class AgentNav {
     private static final Direction[] HORIZONTAL = {
             Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST
     };
-    private static final int MAX_NODES = 6000;
+    /** Node budget. A 35-block route through village houses ran out at 6000 and gave up. */
+    private static final int MAX_NODES = 30000;
+    /** Base search margin; long routes widen it, because a detour can leave a 10 block box. */
     private static final int MARGIN = 10;
+    private static final int MARGIN_MAX = 40;
     private static final int VERTICAL = 8;
 
     private AgentNav() {}
@@ -57,10 +60,14 @@ public final class AgentNav {
             return null;
         }
 
-        int minX = Math.min(start.getX(), goal.getX()) - MARGIN;
-        int maxX = Math.max(start.getX(), goal.getX()) + MARGIN;
-        int minZ = Math.min(start.getZ(), goal.getZ()) - MARGIN;
-        int maxZ = Math.max(start.getZ(), goal.getZ()) + MARGIN;
+        int detour = Math.max(
+                Math.abs(start.getX() - goal.getX()),
+                Math.abs(start.getZ() - goal.getZ())) / 3;
+        int margin = Math.min(MARGIN + detour, MARGIN_MAX);
+        int minX = Math.min(start.getX(), goal.getX()) - margin;
+        int maxX = Math.max(start.getX(), goal.getX()) + margin;
+        int minZ = Math.min(start.getZ(), goal.getZ()) - margin;
+        int maxZ = Math.max(start.getZ(), goal.getZ()) + margin;
         int minY = Math.min(start.getY(), goal.getY()) - VERTICAL;
         int maxY = Math.max(start.getY(), goal.getY()) + 2;
 
