@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$version = '0.3.1'
+$version = '0.3.2'
 $name = 'AgentInMinecraft'
 $lib = 'C:\Users\CJ\AppData\Roaming\PrismLauncher\libraries'
 $jdk = 'C:\Program Files\Java\jdk-21.0.10'
