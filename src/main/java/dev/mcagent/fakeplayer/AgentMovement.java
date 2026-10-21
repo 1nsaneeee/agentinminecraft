@@ -204,7 +204,14 @@ public final class AgentMovement {
         player.setSprinting(walk.sprint || horizontal > 1.5);
 
         boolean jump = false;
-        if (player.onGround()) {
+        if (player.isInWater()) {
+            // Swimming: the ascend flag is what lifts the body, and it has to stay on for
+            // as long as the target is above the feet. Holding it against a wall on land
+            // would do nothing; in water it is the difference between swimming and
+            // sinking to the bottom and standing there.
+            jump = stand.getY() - player.getY() > -0.6;
+            walk.jumpTicks = 0;
+        } else if (player.onGround()) {
             if (hop.jump()) {
                 // Leave the ground while there is still ledge under the feet: a sprint
                 // jump started at the edge has no run-up and falls short.
@@ -223,6 +230,17 @@ public final class AgentMovement {
             walk.jumpTicks--;
         }
         player.setJumping(jump);
+
+        // One line every five ticks while a step is being attempted: the whole reason the
+        // body could not climb was invisible from the outside, and guessing at it cost a
+        // restart each time.
+        if (dy > 0.5 && !player.isInWater() && (player.tickCount % 5 == 0)) {
+            dev.mcagent.McAgent.LOG.info(
+                    "[mcagent] step probe: dy={} horiz={} onGround={} collision={} vy={} jump={}",
+                    String.format("%.2f", dy), String.format("%.2f", horizontal),
+                    player.onGround(), player.horizontalCollision,
+                    String.format("%.3f", player.getDeltaMovement().y), jump);
+        }
 
         trackProgress(player, walk);
         return true;
@@ -246,7 +264,11 @@ public final class AgentMovement {
         player.setSprinting(walk.sprint && horizontal > 1.5);
 
         boolean jump = false;
-        if (player.onGround()) {
+        if (player.isInWater()) {
+            // Same reason as in drive(): in water the ascend flag is the only way up, and
+            // without it the body sinks to the bottom and just stands there.
+            jump = target.y > player.getY() - 0.6;
+        } else if (player.onGround()) {
             if (player.horizontalCollision) {
                 jump = true;
             } else if (horizontal > 1.2) {
