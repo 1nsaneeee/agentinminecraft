@@ -41,6 +41,28 @@ public final class GameBridge {
         server = null;
     }
 
+    /** Closest player that is not one of the agent's own bodies. */
+    public static ServerPlayer nearestHuman(ServerPlayer self) {
+        ServerPlayer best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (ServerPlayer other : self.serverLevel().getServer().getPlayerList().getPlayers()) {
+            if (other == self
+                    || dev.mcagent.fakeplayer.FakePlayers.names()
+                            .contains(other.getGameProfile().getName())) {
+                continue;
+            }
+            if (other.level() != self.level()) {
+                continue;
+            }
+            double d = other.distanceToSqr(self);
+            if (d < bestDist) {
+                bestDist = d;
+                best = other;
+            }
+        }
+        return best;
+    }
+
     public static MinecraftServer server() {
         MinecraftServer s = server;
         if (s == null) throw new IllegalStateException("no server running (singleplayer world not loaded)");

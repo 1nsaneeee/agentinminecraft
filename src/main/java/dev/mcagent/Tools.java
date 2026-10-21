@@ -3,6 +3,9 @@ package dev.mcagent;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.mcagent.client.ClientApi;
+import dev.mcagent.fakeplayer.AgentFollow;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.phys.Vec3;
 import dev.mcagent.fakeplayer.AgentActions;
 import dev.mcagent.fakeplayer.AgentMovement;
 import dev.mcagent.fakeplayer.FakePlayers;
@@ -1140,6 +1143,120 @@ public final class Tools {
                     }
                     boolean was = AgentMovement.stop(p);
                     return McpResult.text(was ? "stopped" : "was not walking");
+                }, 15000));
+
+        JsonObject follow = ToolRegistry.schema("name");
+        ToolRegistry.strProp(follow, "name", "Name of the agent player.");
+        ToolRegistry.strProp(follow, "target",
+                "Player to tail. Omit for the nearest human. The follow keeps re-planning "
+                        + "as they move, unlike mc_player_walk which stops on arrival.");
+        reg(registry, "mc_player_follow",
+                "Have one of the agent's players keep following a player.", follow,
+                args -> GameBridge.onServer(() -> {
+                    if (!AgentConfig.get().allowWrite) {
+                        return McpResult.error("movement is disabled by config (allowWrite=false)");
+                    }
+                    ServerPlayer p = FakePlayers.byName(Json.str(args, "name", ""));
+                    if (p == null) {
+                        return McpResult.error("no such agent player");
+                    }
+                    String want = Json.str(args, "target", "");
+                    ServerPlayer target = want.isEmpty()
+                            ? GameBridge.nearestHuman(p)
+                            : p.serverLevel().getServer().getPlayerList().getPlayerByName(want);
+                    if (target == null) {
+                        return McpResult.error(want.isEmpty()
+                                ? "no human player nearby to follow"
+                                : "no such player: " + want);
+                    }
+                    if (target == p) {
+                        return McpResult.error("cannot follow itself");
+                    }
+                    AgentFollow.start(p, target);
+                    return McpResult.text("following " + target.getGameProfile().getName());
+                }, 15000));
+
+        JsonObject followStop = ToolRegistry.schema("name");
+        ToolRegistry.strProp(followStop, "name", "Name of the agent player.");
+        reg(registry, "mc_player_follow_stop", "Stop following.", followStop,
+                args -> GameBridge.onServer(() -> {
+                    ServerPlayer p = FakePlayers.byName(Json.str(args, "name", ""));
+                    if (p == null) {
+                        return McpResult.error("no such agent player");
+                    }
+                    boolean was = AgentFollow.stop(p);
+                    AgentMovement.stop(p);
+                    return McpResult.text(was ? "stopped following" : "was not following");
+                }, 15000));
+
+        JsonObject give = ToolRegistry.schema("name", "item");
+        ToolRegistry.strProp(give, "name", "Name of the agent player.");
+        ToolRegistry.strProp(give, "item", "Item id, e.g. minecraft:bread or bread.");
+        ToolRegistry.intProp(give, "count", "How many (default 1).");
+        reg(registry, "mc_player_give",
+                "Put an item into the agent player's inventory.", give,
+                args -> GameBridge.onServer(() -> {
+                    if (!AgentConfig.get().allowWrite) {
+                        return McpResult.error("inventory changes are disabled by config (allowWrite=false)");
+                    }
+                    ServerPlayer p = FakePlayers.byName(Json.str(args, "name", ""));
+                    if (p == null) {
+                        return McpResult.error("no such agent player");
+                    }
+                    net.minecraft.world.item.Item item;
+                    try {
+                        item = resolveItem(Json.str(args, "item", ""));
+                    } catch (RuntimeException e) {
+                        return McpResult.error(e.getMessage());
+                    }
+                    int count = Math.max(1, Math.min(64, Json.i(args, "count", 1)));
+                    ItemStack stack = new ItemStack(item, count);
+                    p.getInventory().add(stack);
+                    // add() silently drops what does not fit; say so instead of pretending.
+                    if (!stack.isEmpty()) {
+                        p.drop(stack, false);
+                        return McpResult.text("inventory full - dropped " + itemId(stack)
+                                + " x" + stack.getCount() + " at the feet");
+                    }
+                    return McpResult.text("gave " + itemId(new ItemStack(item)) + " x" + count);
+                }, 15000));
+
+        JsonObject toss = ToolRegistry.schema("name");
+        ToolRegistry.strProp(toss, "name", "Name of the agent player.");
+        ToolRegistry.strProp(toss, "target",
+                "Player to throw it to. Omit to throw it a couple of blocks forward.");
+        reg(registry, "mc_player_throw",
+                "Throw whatever the agent player is holding, aimed at a player.", toss,
+                args -> GameBridge.onServer(() -> {
+                    if (!AgentConfig.get().allowWrite) {
+                        return McpResult.error("throwing is disabled by config (allowWrite=false)");
+                    }
+                    ServerPlayer p = FakePlayers.byName(Json.str(args, "name", ""));
+                    if (p == null) {
+                        return McpResult.error("no such agent player");
+                    }
+                    ItemStack held = p.getMainHandItem().copy();
+                    if (held.isEmpty()) {
+                        return McpResult.error("nothing in hand to throw");
+                    }
+                    p.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+                    Vec3 eye = p.getEyePosition();
+                    String want = Json.str(args, "target", "");
+                    ServerPlayer target = want.isEmpty() ? null
+                            : p.serverLevel().getServer().getPlayerList().getPlayerByName(want);
+                    Vec3 dir;
+                    if (target != null) {
+                        // Aim at the chest, slightly high, so the arc lands near their feet.
+                        dir = target.position().add(0.0, 0.9, 0.0).subtract(eye).normalize();
+                    } else {
+                        dir = p.getLookAngle();
+                    }
+                    ItemEntity drop = new ItemEntity(p.level(), eye.x, eye.y - 0.25, eye.z, held);
+                    drop.setDeltaMovement(dir.x * 0.9, dir.y * 0.4 + 0.35, dir.z * 0.9);
+                    drop.setPickUpDelay(10);
+                    p.level().addFreshEntity(drop);
+                    return McpResult.text("threw " + itemId(held) + " x" + held.getCount()
+                            + (target != null ? " towards " + target.getGameProfile().getName() : ""));
                 }, 15000));
     }
 

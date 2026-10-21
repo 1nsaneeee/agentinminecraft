@@ -41,7 +41,7 @@ chat 模式**允许**：所有读取工具、`mc_player_walk/halt/look/hold/spaw
 
 **agent 无法自行退出 chat 模式**——只有人类能在游戏内输入 `/agent work`。
 
-## 工具清单（35）
+## 工具清单（39）
 
 ### 读取
 
