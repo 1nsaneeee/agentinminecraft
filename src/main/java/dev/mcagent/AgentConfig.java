@@ -22,7 +22,7 @@ public final class AgentConfig {
     public String host = "127.0.0.1";
     public int port = 38121;
     public String token = "";
-    /** Allow mc_command / WS exec to run arbitrary commands. */
+    /** Allow mc_command to run game commands. */
     public boolean allowCommands = true;
     /** Allow world-mutating tools (set_block, etc). */
     public boolean allowWrite = false;
@@ -54,7 +54,7 @@ public final class AgentConfig {
      */
     public String agentName = "Deepseek";
 
-    private static AgentConfig instance = new AgentConfig();
+    private static volatile AgentConfig instance = new AgentConfig();
     private static Path file;
 
     /** Re-read the file without restarting the game. */
@@ -62,8 +62,41 @@ public final class AgentConfig {
         if (file == null) {
             return false;
         }
-        load(file.getParent());
+        final AgentConfig candidate;
+        try {
+            JsonObject values = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            validateReloadFields(values);
+            candidate = readFields(values);
+        } catch (IOException | RuntimeException error) {
+            // Parser messages can contain the secret-bearing input line.
+            throw new IllegalStateException("invalid or unreadable configuration; previous settings retained");
+        }
+        if (candidate.token == null || candidate.token.isBlank())
+            throw new IllegalStateException("configuration token must be nonblank; previous settings retained");
+        if (candidate.host == null || candidate.host.isBlank() || candidate.port < 1 || candidate.port > 65535)
+            throw new IllegalStateException("invalid bridge host or port; previous settings retained");
+        instance = candidate;
         return true;
+    }
+
+    private static void validateReloadFields(JsonObject values) {
+        for (String key : SETTABLE_BOOL) {
+            if (values.has(key) && (!values.get(key).isJsonPrimitive()
+                    || !values.getAsJsonPrimitive(key).isBoolean()))
+                throw new IllegalArgumentException("invalid boolean field: " + key);
+        }
+        for (String key : SETTABLE_INT) {
+            if (!values.has(key)) continue;
+            if (!values.get(key).isJsonPrimitive() || !values.getAsJsonPrimitive(key).isNumber())
+                throw new IllegalArgumentException("invalid integer field: " + key);
+            values.getAsJsonPrimitive(key).getAsBigDecimal().intValueExact();
+        }
+        for (String key : java.util.List.of("token", "host", "playerName", "agentName",
+                "skinFile", "skinPlayer", "skinModel")) {
+            if (values.has(key) && (!values.get(key).isJsonPrimitive()
+                    || !values.getAsJsonPrimitive(key).isString()))
+                throw new IllegalArgumentException("invalid text field: " + key);
+        }
     }
 
     /** Where the file lives, for the config command. */
@@ -78,18 +111,16 @@ public final class AgentConfig {
                 : token.substring(0, 4) + "..." + token.substring(token.length() - 4);
         java.util.List<String> out = new java.util.ArrayList<>();
         out.add("file      = " + path());
-        out.add("enabled   = " + enabled + "    mode = " + AgentMode.id());
+        out.add("enabled   = " + enabled);
         out.add("host      = " + host + "    port = " + port);
         out.add("token     = " + shownToken + "  (masked)");
         out.add("playerName = " + resolvedPlayerName() + "    (the body)");
-        out.add("agentName  = " + speakName() + "    (when no body exists)");
         out.add("allowCommands = " + allowCommands + "    allowWrite = " + allowWrite);
         out.add("skinFile  = " + (skinFile == null || skinFile.isBlank() ? "(none)" : skinFile)
                 + "    skinModel = " + skinModel);
         out.add("skinPlayer = " + (skinPlayer == null || skinPlayer.isBlank()
                 ? "(follows player)" : skinPlayer));
-        out.add("greetOnJoin = " + greetOnJoin
-                + "    maxOutputChars = " + maxOutputChars + "    maxLogLines = " + maxLogLines);
+        out.add("maxOutputChars = " + maxOutputChars + "    maxLogLines = " + maxLogLines);
         return out;
     }
 
@@ -102,8 +133,8 @@ public final class AgentConfig {
 
     /** Keys this command accepts. Anything else is a file-only or startup-only setting. */
     public static final java.util.List<String> SETTABLE = java.util.List.of(
-            "allowCommands", "allowWrite", "playerName", "agentName",
-            "skinFile", "skinModel", "skinPlayer", "greetOnJoin",
+            "allowCommands", "allowWrite", "playerName",
+            "skinFile", "skinModel", "skinPlayer",
             "maxOutputChars", "maxLogLines",
             "host", "port", "enabled");
 
@@ -190,9 +221,7 @@ public final class AgentConfig {
             }
             case "allowCommands" -> c.allowCommands = parseBool(v, c.allowCommands);
             case "allowWrite" -> c.allowWrite = parseBool(v, c.allowWrite);
-            case "greetOnJoin" -> c.greetOnJoin = parseBool(v, c.greetOnJoin);
             case "playerName" -> c.playerName = v;
-            case "agentName" -> c.agentName = v;
             case "skinFile" -> c.skinFile = v;
             case "skinModel" -> {
                 String m = v.toLowerCase(java.util.Locale.ROOT);
@@ -281,30 +310,7 @@ public final class AgentConfig {
         if (Files.isRegularFile(file)) {
             try {
                 JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
-                cfg.enabled = Json.b(o, "enabled", cfg.enabled);
-                cfg.host = Json.str(o, "host", cfg.host);
-                cfg.port = Json.i(o, "port", cfg.port);
-                cfg.token = Json.str(o, "token", cfg.token);
-                cfg.allowCommands = Json.b(o, "allowCommands", cfg.allowCommands);
-                cfg.allowWrite = Json.b(o, "allowWrite", cfg.allowWrite);
-                cfg.maxOutputChars = Json.i(o, "maxOutputChars", cfg.maxOutputChars);
-                cfg.maxLogLines = Json.i(o, "maxLogLines", cfg.maxLogLines);
-                cfg.greetOnJoin = Json.b(o, "greetOnJoin", cfg.greetOnJoin);
-                cfg.agentName = Json.str(o, "agentName", cfg.agentName);
-                cfg.playerName = Json.str(o, "playerName", cfg.playerName);
-                cfg.skinPlayer = Json.str(o, "skinPlayer", cfg.skinPlayer);
-                cfg.skinModel = Json.str(o, "skinModel", cfg.skinModel);
-                cfg.skinFile = Json.str(o, "skinFile", cfg.skinFile);
-                // A blank persisted value would silently disable the feature it feeds.
-                if (cfg.skinFile == null || cfg.skinFile.isBlank()) {
-                    cfg.skinFile = "config/mcagent/skin.png";
-                }
-                if (cfg.skinModel == null || cfg.skinModel.isBlank()) {
-                    cfg.skinModel = "auto";
-                }
-                if (cfg.playerName == null || cfg.playerName.isBlank()) {
-                    cfg.playerName = cfg.agentName;
-                }
+                cfg = readFields(o);
             } catch (Exception e) {
                 McAgent.LOG.warn("[mcagent] config unreadable, falling back to defaults", e);
             }
@@ -317,6 +323,35 @@ public final class AgentConfig {
         if (needWrite || !Files.isRegularFile(file)) {
             save();
         }
+    }
+
+    private static AgentConfig readFields(JsonObject o) {
+        AgentConfig cfg = new AgentConfig();
+        cfg.enabled = Json.b(o, "enabled", cfg.enabled);
+        cfg.host = Json.str(o, "host", cfg.host);
+        cfg.port = Json.i(o, "port", cfg.port);
+        cfg.token = Json.str(o, "token", cfg.token);
+        cfg.allowCommands = Json.b(o, "allowCommands", cfg.allowCommands);
+        cfg.allowWrite = Json.b(o, "allowWrite", cfg.allowWrite);
+        cfg.maxOutputChars = Json.i(o, "maxOutputChars", cfg.maxOutputChars);
+        cfg.maxLogLines = Json.i(o, "maxLogLines", cfg.maxLogLines);
+        cfg.greetOnJoin = Json.b(o, "greetOnJoin", cfg.greetOnJoin);
+        cfg.agentName = Json.str(o, "agentName", cfg.agentName);
+        cfg.playerName = Json.str(o, "playerName", cfg.playerName);
+        cfg.skinPlayer = Json.str(o, "skinPlayer", cfg.skinPlayer);
+        cfg.skinModel = Json.str(o, "skinModel", cfg.skinModel);
+        cfg.skinFile = Json.str(o, "skinFile", cfg.skinFile);
+        // A blank persisted value would silently disable the feature it feeds.
+        if (cfg.skinFile == null || cfg.skinFile.isBlank()) {
+            cfg.skinFile = "config/mcagent/skin.png";
+        }
+        if (cfg.skinModel == null || cfg.skinModel.isBlank()) {
+            cfg.skinModel = "auto";
+        }
+        if (cfg.playerName == null || cfg.playerName.isBlank()) {
+            cfg.playerName = cfg.agentName;
+        }
+        return cfg;
     }
 
     /**

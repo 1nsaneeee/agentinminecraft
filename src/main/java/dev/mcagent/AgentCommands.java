@@ -9,71 +9,41 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-/**
- * In-game control surface for the agent.
- *
- * <p>The game does not act on these commands itself: it turns them into
- * {@code agent_cmd} frames on the chat topic and lets the harness decide what they
- * mean. That keeps session semantics on the side that owns sessions, and it means a
- * command sent while no agent is attached gets an honest refusal instead of silently
- * doing nothing.</p>
- *
- * <p>{@code /agent ...} is the canonical form. The bare {@code /work}, {@code /chat},
- * {@code /new} and {@code /session} are registered too, but only when no other mod has
- * already claimed the name - a silent clash with someone else's command would be far
- * worse than a slightly longer command.</p>
- */
+/** Native selection and local operator controls. */
 public final class AgentCommands {
 
     private AgentCommands() {}
-
-    private static int send(CommandSourceStack src, String cmd, String arg) {
-        if (!AgentConfig.get().allowCommands) {
-            src.sendFailure(Component.literal("[agent] 命令已被配置禁用 (allowCommands=false)"));
-            return 0;
-        }
-        if (McAgent.WS.size() == 0) {
-            src.sendFailure(Component.literal("[agent] 没有 agent 在听（WS 客户端 0 个）"));
-            return 0;
-        }
-        JsonObject frame = Json.obj();
-        frame.addProperty("type", "agent_cmd");
-        frame.addProperty("cmd", cmd);
-        if (arg != null) {
-            frame.addProperty("arg", arg);
-        }
-        // The mod owns the mode so it can enforce it; the plugin listens on the same
-        // frame and keeps its own copy for the reply style.
-        if ("work".equals(cmd)) {
-            AgentMode.set(AgentMode.Mode.WORK);
-        } else if ("chat".equals(cmd)) {
-            AgentMode.set(AgentMode.Mode.CHAT);
-        }
-        frame.addProperty("mode", AgentMode.id());
-        frame.addProperty("by", src.getTextName());
-        McAgent.WS.broadcast(WsHub.TOPIC_CHAT, frame);
-        src.sendSuccess(() -> Component.literal("[agent] " + cmd + (arg == null ? "" : " " + arg)), false);
-        return 1;
-    }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> sessionBranch() {
-        return Commands.literal("session")
-                .executes(ctx -> send(ctx.getSource(), "session", null))
-                .then(Commands.argument("which", StringArgumentType.greedyString())
-                        .executes(ctx -> send(ctx.getSource(), "session",
-                                StringArgumentType.getString(ctx, "which"))));
-    }
 
     public static void register(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
 
         d.register(Commands.literal("agent")
                 .requires(src -> src.hasPermission(2))
-                .then(Commands.literal("work").executes(ctx -> send(ctx.getSource(), "work", null)))
-                .then(Commands.literal("chat").executes(ctx -> send(ctx.getSource(), "chat", null)))
-                .then(Commands.literal("new").executes(ctx -> send(ctx.getSource(), "new", null)))
-                .then(sessionBranch())
+                .then(Commands.literal("stop").executes(ctx -> {
+                    JsonObject state = AgentControl.stop("human_stopped");
+                    ctx.getSource().sendSuccess(() -> Component.literal("[agent] 已停止操作；仍可读取世界。/agent resume 仅重新开放新请求，不重放旧任务。"
+                            + (state.getAsJsonArray("stopErrors").isEmpty() ? "" : " 部分停止失败，请检查日志并重试停止。")), false);
+                    return state.getAsJsonArray("stopErrors").isEmpty() ? 1 : 0;
+                }))
+                .then(Commands.literal("resume").executes(ctx -> {
+                    if (GameBridge.bridgeCommand()) {
+                        ctx.getSource().sendFailure(Component.literal("[agent] resume requires native human input, not a bridge command")); return 0;
+                    }
+                    try {
+                        var human = ctx.getSource().getPlayerOrException();
+                        if (dev.mcagent.fakeplayer.FakePlayers.byName(human.getGameProfile().getName()) != null)
+                            throw new IllegalStateException("only a human player can resume agent operations");
+                        AgentControl.resume();
+                        ctx.getSource().sendSuccess(() -> Component.literal("[agent] 已重新开放新操作；请从外部 Agent 发起新任务。"), false);
+                        return 1;
+                    } catch (IllegalStateException error) {
+                        ctx.getSource().sendFailure(Component.literal("[agent] " + error.getMessage())); return 0;
+                    }
+                }))
+                .then(editBranch())
+                .then(PlayerSelections.command())
                 .then(Commands.literal("config")
+                        .requires(src -> !GameBridge.bridgeCommand())
                         .executes(ctx -> showConfig(ctx.getSource()))
                         .then(Commands.literal("reload").executes(ctx -> reloadConfig(ctx.getSource())))
                         .then(Commands.literal("set")
@@ -83,12 +53,45 @@ public final class AgentCommands {
                                                         StringArgumentType.getString(ctx, "key"),
                                                         StringArgumentType.getString(ctx, "value"))))))));
 
-        alias(d, "work", "work");
-        alias(d, "chat", "chat");
-        alias(d, "new", "new");
-        alias(d, "session", "session");
     }
 
+
+    private static LiteralArgumentBuilder<CommandSourceStack> editBranch() {
+        return Commands.literal("edit")
+                .then(Commands.literal("stop").executes(ctx -> {
+                    EditJobs.stopAll("human_stopped");
+                    UndoJobs.stopAll("human_stopped");
+                    EditPlans.clear();
+                    ctx.getSource().sendSuccess(() -> Component.literal(
+                            "[agent] 已停止当前编辑和撤销任务，并丢弃未执行预览。请查询实际结果和撤销记录。"), false);
+                    return 1;
+                }))
+                .then(Commands.literal("discard-undo")
+                        .then(Commands.argument("recordId", StringArgumentType.word())
+                                .then(Commands.literal("confirm").executes(ctx ->
+                                        discardUndo(ctx.getSource(), StringArgumentType.getString(ctx, "recordId"))))));
+    }
+
+    private static int discardUndo(CommandSourceStack source, String recordId) {
+        var player = source.getPlayer();
+        if (GameBridge.bridgeCommand() || player == null || source.source != player
+                || player instanceof net.neoforged.neoforge.common.util.FakePlayer
+                || dev.mcagent.fakeplayer.FakePlayers.byName(player.getGameProfile().getName()) == player
+                || source.getServer().getPlayerList().getPlayer(player.getUUID()) != player) {
+            source.sendFailure(Component.literal("[agent] 仅真人可在游戏内确认丢弃撤销记录。"));
+            return 0;
+        }
+        if (EditJobs.active()) {
+            source.sendFailure(Component.literal("[agent] 请先停止当前编辑或撤销任务。"));
+            return 0;
+        }
+        if (!EditHistory.discardHead(recordId)) {
+            source.sendFailure(Component.literal("[agent] 撤销记录已变化。请先查 mc_undo_records。"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("[agent] 已丢弃指定撤销记录。游戏方块保持当前状态。"), false);
+        return 1;
+    }
 
     /** Print every value, one line each. The token is masked - never echo a credential. */
     private static int showConfig(CommandSourceStack src) {
@@ -104,14 +107,20 @@ public final class AgentCommands {
         return 1;
     }
 
-    /** Re-read config/mcagent.json without restarting the game. */
+    /** Re-read configuration and revoke old connections without restarting the game. */
     private static int reloadConfig(CommandSourceStack src) {
-        if (!AgentConfig.reload()) {
-            src.sendFailure(Component.literal("[agent] config file was never loaded"));
+        try {
+            if (!McAgent.reloadConfig()) {
+                src.sendFailure(Component.literal("[agent] config file was never loaded"));
+                return 0;
+            }
+        } catch (IllegalStateException error) {
+            src.sendFailure(Component.literal("[agent] config reload refused: " + error.getMessage()));
             return 0;
         }
         src.sendSuccess(() -> Component.literal(
-                "[agent] reloaded " + AgentConfig.path() + " (mode = " + AgentMode.id() + ")"), false);
+                "[agent] reloaded " + AgentConfig.path()
+                        + "; previous tasks and bridge connections were revoked"), false);
         return 1;
     }
 
@@ -128,19 +137,4 @@ public final class AgentCommands {
         return 1;
     }
 
-    private static void alias(CommandDispatcher<CommandSourceStack> d, String name, String cmd) {
-        if (d.getRoot().getChild(name) != null) {
-            McAgent.LOG.info("[mcagent] /{} is already claimed by another mod; alias skipped", name);
-            return;
-        }
-        LiteralArgumentBuilder<CommandSourceStack> b = Commands.literal(name)
-                .requires(src -> src.hasPermission(2))
-                .executes(ctx -> send(ctx.getSource(), cmd, null));
-        if ("session".equals(cmd)) {
-            b.then(Commands.argument("which", StringArgumentType.greedyString())
-                    .executes(ctx -> send(ctx.getSource(), "session",
-                            StringArgumentType.getString(ctx, "which"))));
-        }
-        d.register(b);
-    }
 }

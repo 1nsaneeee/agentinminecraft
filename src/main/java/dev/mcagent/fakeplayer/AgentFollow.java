@@ -31,15 +31,19 @@ public final class AgentFollow {
     private static final double SPRINT_DISTANCE = 7.0;
 
     private static final Map<UUID, UUID> FOLLOWING = new HashMap<>();
+    private static final Map<UUID, String> LAST_WALK = new HashMap<>();
 
     private AgentFollow() {}
 
     public static void start(ServerPlayer self, ServerPlayer target) {
+        AgentMovement.stop(self);
+        LAST_WALK.remove(self.getUUID());
         FOLLOWING.put(self.getUUID(), target.getUUID());
     }
 
     /** @return true if something was actually following. */
     public static boolean stop(ServerPlayer self) {
+        LAST_WALK.remove(self.getUUID());
         return FOLLOWING.remove(self.getUUID()) != null;
     }
 
@@ -53,6 +57,7 @@ public final class AgentFollow {
 
     public static void clearAll() {
         FOLLOWING.clear();
+        LAST_WALK.clear();
     }
 
     /** Called once per server tick, alongside the movement tick. */
@@ -67,9 +72,10 @@ public final class AgentFollow {
             ServerPlayer self = server.getPlayerList().getPlayer(entry.getKey());
             ServerPlayer target = server.getPlayerList().getPlayer(entry.getValue());
             if (self == null || target == null
-                    || self.isRemoved() || target.isRemoved()
+                    || self.isRemoved() || target.isRemoved() || !self.isAlive() || !target.isAlive()
                     || self.level() != target.level()) {
                 it.remove();
+                LAST_WALK.remove(entry.getKey());
                 if (self != null) {
                     AgentMovement.stop(self);
                 }
@@ -82,8 +88,19 @@ public final class AgentFollow {
                 continue;
             }
             if (gap > START_DISTANCE && !AgentMovement.isWalking(self)) {
+                String previous = LAST_WALK.get(self.getUUID());
+                if (previous != null) {
+                    String status = dev.mcagent.ActionJournal.get(previous).get("status").getAsString();
+                    if (status.equals("failed") || status.equals("timed_out") || status.equals("outcome_unknown")) {
+                        // Let the agent reconsider; do not restart the same failed route forever.
+                        it.remove();
+                        LAST_WALK.remove(self.getUUID());
+                        continue;
+                    }
+                }
                 Vec3 goal = target.position();
                 AgentMovement.start(self, goal, gap > SPRINT_DISTANCE, now);
+                LAST_WALK.put(self.getUUID(), AgentMovement.actionId(self));
             }
         }
     }

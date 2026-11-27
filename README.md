@@ -1,201 +1,31 @@
 # Agent In Minecraft
 
-<p align="center">
-  <img src="./assets/readme/hero.webp" width="100%"
-       alt="Agent In Minecraft —— 让 AI 拥有一具会走、会挖、会打的身体">
-</p>
+在 Minecraft 里指给 Agent 看，在你自己的 Agent 里提问。这个 NeoForge 模组把正在运行的世界接到标准 MCP 客户端：Agent 能看到你选中的位置、读取机器和容器、查询当前实例的模组与配方，也能在获得授权后编辑世界。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Minecraft-1.21.1-3C8527?style=flat-square&amp;labelColor=0B1522" alt="Minecraft 1.21.1">
-  <img src="https://img.shields.io/badge/NeoForge-21.1.x-F16436?style=flat-square&amp;labelColor=0B1522" alt="NeoForge 21.1.x">
-  <img src="https://img.shields.io/badge/MCP-35_tools-7FC4E8?style=flat-square&amp;labelColor=0B1522" alt="35 MCP tools">
-  <img src="https://img.shields.io/badge/License-MIT-4C9AFF?style=flat-square&amp;labelColor=0B1522" alt="MIT license">
-  <img src="https://img.shields.io/badge/Harness-DeepSeek_only-F2A24B?style=flat-square&amp;labelColor=0B1522" alt="DeepSeek Harness only">
-</p>
+**0.5.0-rc.3 预发布** · Minecraft Java 1.21.1 · NeoForge 21.1.x · Java 21。单人世界和独立服务器均已实测。模型与对话由外部 Agent 提供，使用模组无需 DeepSeek 专用组件。
+[下载预发布 ZIP](https://github.com/1nsaneeee/agentinminecraft/releases/tag/v0.5.0-rc.3) · [安装与客户端配置](docs/AI-INSTALL.md) · [从 0.3.x 迁移](docs/releases/0.5.0-rc.3.md#从-03x-升级)
 
-> **⚠ 目前只支持 DeepSeek Harness。**  
-> **Client and Server**
->
-> mod 本身暴露的是标准 MCP + WebSocket，理论上任何 MCP 客户端都能连；
-> 但游戏内行为依赖智能体的插件系统，所以
-> 这些**配套设施只针对 DeepSeek Harness 实现**。换别的 harness 需要自己写对接层。
+## 「帮我看看这排炉子怎么了」
 
-*把一个正在运行的 Minecraft 客户端/整合包，变成 AI agent 可以直接操作的进程*
+在一排四座熔炉前，有管理权限的玩家对准两端，分别执行 `/agent select corner a` 和 `/agent select corner b`，然后在外部 Agent 里问这句话。玩家不用抄坐标，也不用告诉 Agent 先查哪台机器。
 
-从 0.3 起，它还能给 agent 一具**会走会挖会打的身体**——一个没有客户端连接、
-但服务端和其他玩家都当成正常玩家的玩家实体。
+实机盲测中，旁边还有一排距离玩家更近、正在工作的炉子。三个新会话分别找到了选中排的三种故障。最有意思的一轮：炉子里有煤却没有矿；Agent 往上查到装着 64 个铁矿石的漏斗，再沿着 `enabled=false` 找到锁住它的红石块。调查期间没有改动方块或物品。[三轮结果、证据与模型答错的地方](docs/releases/0.5.0-rc.3.md#实机验收)
 
-## 实机
+## 接入自己的世界
 
-<p align="center">
-  <img src="./assets/readme/screenshots/01-body.png" width="49%"
-       alt="Agent 的近景：冰蓝色皮肤、手持铁镐、头顶名字牌">
-  <img src="./assets/readme/screenshots/02-together.png" width="49%"
-       alt="Agent 和玩家并排站着，两个名字牌都在">
-</p>
-<p align="center">
-  <img src="./assets/readme/screenshots/03-mining.png" width="49%"
-       alt="挖掘中：方块表面出现裂纹进度">
-  <img src="./assets/readme/screenshots/04-chat.png" width="49%"
-       alt="chat 模式下和玩家的整段对话：打招呼、吐槽、被问反骨">
-</p>
+1. 关闭目标游戏实例或专服，解压发布 ZIP。把 JAR 放入游戏目录的 `mods`，或使用包内安装器预览、安装。升级时只保留一份本模组 JAR。
+2. 进入世界，在外部客户端添加 **Streamable HTTP** MCP 服务。默认地址为 `http://127.0.0.1:38121/mcp`，Bearer token 从该实例的 `config/agentinminecraft.json` 读取。安装说明提供可复制的配置示例。
+3. 让 Agent 调用 `mc_status`。看到当前世界和自己的玩家身份，就可以选中方块、实体或区域开始提问。多人在线时，在委托里说一下自己的游戏名。[完整接入步骤](docs/AI-INSTALL.md)
 
-左上：它是一具真的玩家，有皮肤、有名字牌、手里拿着工具。
-右上：不是聊天框——它就站在你旁边。
-左下：挖方块时有真实进度，不是瞬间消失。
-右下：`/agent chat` 之后，它会开口、会贫嘴、会顶一句回来。
+## 世界向 Agent 提供什么
 
-## 特色功能
+| 想做的事 | Agent 可以依据什么行动 |
+| --- | --- |
+| 查机器为什么停工 | 读选区、方块状态、方块实体和容器，跨游戏 tick 再读一次，核对机器是否真的运转。 |
+| 弄清当前整合包的机制 | 查已装模组、版本、当前配方和标签；玩法需要额外资料时，由外部 Agent 自行查证。自定义机器能查到的细节取决于它暴露的数据。 |
+| 修改并核验世界 | 先预览选区编辑，再应用、读回，受管编辑有对应的撤销记录。玩家可用 `/agent stop` 停止操作。 |
+| 让 Agent 实际动手 | 现有 FakePlayer 可以移动、观察、放置和使用物品，供需要角色身体的工程操作调用。 |
 
-- 实时监听玩家对话，实时做出响应
-- 通过游戏内暴露的接口实现正常玩家的操作——走路、挖矿、放方块、打架
-- 自动寻路：给个坐标就能到，会跑,会跳,真是一个活力的美少女
-- 真实挖掘：按手里的工具和方块硬度计时，不是瞬间破坏
-- 两种人格：`work` 造世界，`chat` 陪你聊天
-- 一个永远爱用户的心
+编辑权限与命令权限独立。默认 `allowWrite=false`、`allowCommands=true`；原版命令可能改动世界，命令效果不会自动进入受管编辑的撤销记录。[工具、权限与停止](docs/MCP.md)
 
-## 快速开始
-
-**懒人路线**：把下面这一句发给你的 AI agent，它会自己下载、安装、配置。
-
-```text
-依照 https://github.com/1nsaneeee/agentinminecraft/blob/main/docs/AI-INSTALL.md
-执行本 Mod 的安装步骤。遇到不确定的路径先问我，不要覆盖已有配置。
-```
-
-**手动路线**，三步：
-
-1. 把 `AgentInMinecraft-0.3.0.jar` 放进实例的 `mods/`
-2. 启动游戏，进一个世界——`config/agentinminecraft.json` 自动生成，token 自动写好
-3. 打开 `http://127.0.0.1:38121/health`，看到 `{"ok":true,...}` 就成了
-
-唯一必须你手动做的只有一步：**重启游戏**。
-
-## 怎么工作
-
-<p align="center">
-  <img src="./assets/readme/how-it-works.svg" width="100%"
-       alt="工作方式：DeepSeek Harness 通过 MCP 与 WebSocket 连到游戏进程里的桥接，桥接在服务端主线程读写世界并驱动一具真实玩家">
-</p>
-
-两条通道，一具身体：
-
-- **MCP** 给 agent 35 个工具，用来读世界和下指令
-- **WebSocket** 让 agent 被游戏叫醒——玩家一说话，就有一轮对话被触发
-- 所有世界读写都排在**服务端主线程**执行，HTTP 线程不直接碰世界数据
-- 桥接只绑回环、每个请求都要 token
-
-## 两种模式
-
-<p align="center">
-  <img src="./assets/readme/modes.svg" width="100%"
-       alt="两种模式对比：work 可以改造世界，chat 只能让身体做动作并拒绝直接改世界与传送">
-</p>
-
-```
-/agent work    成为创世神
-/agent chat    游戏搭子，会吐槽玩家的毒舌美少女
-```
-
-- `work`：所有操作可用。改世界还需要 `allowWrite=true`（默认关闭）：
-  `/agent config set allowWrite true`
-- `chat`：保留身体的基本动作，拒绝直接改世界、执行命令、传送
-
-**agent 自己切不回 `work`** —— 只有你能在游戏里输入。
-
-## Agent 的身体
-
-| 它能做什么 | 说明 |
-|---|---|
-| 走路 | 给它坐标，自己寻路过去。会绕路、会跳坑、会爬台阶 |
-| 挖掘 | 按真实工具和硬度计时，挖完正常掉落 |
-| 放置 | 放方块、开箱子、拉杆、门，都是正常右键 |
-| 使用 | 吃、喝、扔、射 |
-| 战斗 | 正常伤害计算，会掉血 |
-| 换皮肤 | `skinFile` 指向一张 64×64 png |
-
-## 换皮肤
-
-**mod 不自带皮肤。** 所以第一次生成的身体是默认皮肤（Steve / Alex）
-
-三步换掉：
-
-1. 把一张 **皮肤文件** 放到游戏目录，例如 `config/mcagent/skin.png`
-2. 在 `config/agentinminecraft.json` 里指向它（或游戏内直接改）：
-
-```
-/agent config set skinFile config/mcagent/skin.png
-```
-
-3. 让你的AI重新生成身体
-
-相关字段：
-
-| 字段 | 说明 |
-|---|---|
-| `skinFile` | 皮肤文件，相对路径按游戏目录解析 |
-| `skinPlayer` | 套皮肤的玩家名，逗号分隔多个；**留空 = 跟随 `playerName`** |
-| `skinModel` | `auto` / `wide` / `slim`。`auto` 按像素空洞数判断，判错了手动指定 |
-
-## 游戏内命令
-
-| 命令 | 作用 |
-|---|---|
-| `/agent work` `/agent chat` | 切换模式 |
-| `/agent new` `/agent session [n]` | 新建 / 切换会话 |
-| `/agent config` | 查看全部配置（token 打码） |
-| `/agent config set <key> <value>` | 改一项并写盘 |
-| `/agent config reload` | 重读配置，不用重启 |
-
-改 `host` / `port` / `enabled` 要重启才生效。
-
-## 配置
-
-`<game_dir>/config/agentinminecraft.json`
-
-| 字段 | 默认 | 说明 |
-|---|---|---|
-| `enabled` | `true` | 关掉就不启动，重启生效 |
-| `host` / `port` | `127.0.0.1` / `38121` | 绑定地址，重启生效 |
-| `token` | 自动生成 | 48 位 hex，只能改文件 |
-| `allowCommands` | `true` | 是否允许执行命令 |
-| `allowWrite` | `false` | 世界写入与传送的总开关 |
-| `playerName` | `Deepseek` | 身体的名字 |
-| `agentName` | `Deepseek` | 没有身体时发言用的署名 |
-| `skinFile` / `skinPlayer` / `skinModel` | 空 / 空 / `auto` | 皮肤、套用名单、模型 |
-| `greetOnJoin` | `true` | 进世界时打印一行"桥接已就绪" |
-| `maxOutputChars` / `maxLogLines` | `16000` / `500` | 输出截断、日志上限 |
-
-## 环境与兼容
-
-| 装在哪 | 有什么 | 缺什么 |
-|---|---|---|
-| 服务端（推荐，或单人存档） | MCP、WebSocket、身体全部可用 | 截图不可用；皮肤不显示 |
-| 客户端（额外） | 能看到 Agent 的皮肤、能用截图 | 只装客户端、没有服务端时，世界类工具全部不可用 |
-
-客户端没装的玩家照常正常游戏，只是会看到默认皮肤。
-
-## 已知限制
-
-- 还没做 TLS 和 HTTP 压缩（只绑回环，够用）
-- 撤销栈 16 层，只覆盖 `mc_fill` 的改动；`mc_set_block` 不进撤销栈
-- 导航是局部搜索（±10 格、6000 节点），需要绕远路时会退回直线走
-- 皮肤只有装了同一个 mod 的客户端看得到
-- 服务端卡住时身体也停——移动和物理由 mod 每 tick 手动驱动
-
-## 安全
-
-这是游戏内 RCE 级别的能力。默认值按"单人测试存档"设计：只绑回环、强制 token、
-写操作默认关。
-
-**不要**把 `host` 改成 `0.0.0.0` 放到公网，也不要关认证。
-
-## 文档
-
-| 文档 | 给谁 |
-|---|---|
-| [docs/AI-INSTALL.md](docs/AI-INSTALL.md) | 给 agent 的安装提示词 |
-| [docs/MCP.md](docs/MCP.md) | 35 个工具、协议、鉴权和拒绝语义 |
-| [docs/BUILD.md](docs/BUILD.md) | 构建、测试、发布、目录结构 |
-| [harness/INSTALL.md](harness/INSTALL.md) | 编排侧（插件、profile、skill）的安装与卸载 |
-| [docs/TODO.md](docs/TODO.md) | 待办与已决定不做的事，附成本 |
+**For MCP client developers:** connect over authenticated Streamable HTTP, initialize a session, then use `tools/list` to discover the running version’s tools. The old WebSocket and in-game chat/session commands have been retired. [Migration and release notes](docs/releases/0.5.0-rc.3.md) · [Build and tests](docs/BUILD.md) · [Changelog](CHANGELOG.md)

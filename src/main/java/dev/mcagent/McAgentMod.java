@@ -5,7 +5,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -35,15 +34,21 @@ public final class McAgentMod {
         bus.addListener((ServerStartedEvent event) -> {
             GameBridge.attach(event.getServer());
             McAgent.LOG.info("[mcagent] world loaded: {}", event.getServer().overworld().dimension().location());
-            AgentConfig.load(dev.mcagent.util.Dist2.configDir());
-            // Advertise where this instance's config lives, so the harness plugin does
-            // not need a hard-coded path to one specific instance.
-            AgentDiscovery.publish();
-            McAgent.WS.pushEvent("server_started", GameBridge.snapshot());
+            try {
+                // World entry also reloads the file. Menu-era connections cannot
+                // keep old authentication if its token or bind settings changed.
+                McAgent.reloadConfig();
+            } catch (IllegalStateException error) {
+                McAgent.LOG.warn("[mcagent] world-entry config reload refused: {}", error.getMessage());
+                if (McAgent.running()) AgentDiscovery.publish();
+                else AgentDiscovery.withdraw();
+            }
         });
 
         bus.addListener((ServerStoppingEvent event) -> {
-            McAgent.WS.pushEvent("server_stopping", null);
+            EditJobs.stopAll("world_stopping");
+            UndoJobs.stopAll("world_stopping");
+            BlockObservations.stopAll("world_stopping");
             try {
                 dev.mcagent.fakeplayer.AgentMovement.stopAll(event.getServer());
                 dev.mcagent.fakeplayer.AgentActions.cancelAll(event.getServer());
@@ -58,72 +63,27 @@ public final class McAgentMod {
         });
 
         bus.addListener((ServerTickEvent.Post event) -> {
-            dev.mcagent.fakeplayer.AgentMovement.tick(event.getServer());
+            ExternalTasks.tick();
+            if (AgentControl.active()) {
+                EditJobs.tick(event.getServer());
+                UndoJobs.tick(event.getServer());
+            }
+            BlockObservations.tick(event.getServer());
+            if (AgentControl.active()) {
+                dev.mcagent.fakeplayer.AgentMovement.tick(event.getServer());
                 dev.mcagent.fakeplayer.AgentFollow.tick(event.getServer());
-                // Idle fidget only fills the gaps: movement and actions win.
-                dev.mcagent.fakeplayer.AgentIdle.tick(event.getServer());
+            }
             TpsTracker.onTick();
             Highlights.tick(event.getServer());
             Watchers.tick(event.getServer());
         });
 
-        // Only blocks that carry a block entity are pushed: a wall of
-        // interesting events, not every dirt block the player places.
-        bus.addListener((net.neoforged.neoforge.event.level.BlockEvent.EntityPlaceEvent event) -> {
-            if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) return;
-            if (!event.getPlacedBlock().hasBlockEntity()) return;
-            com.google.gson.JsonObject data = Json.obj();
-            data.addProperty("pos", event.getPos().getX() + "," + event.getPos().getY() + "," + event.getPos().getZ());
-            data.addProperty("block", String.valueOf(
-                    net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(event.getPlacedBlock().getBlock())));
-            data.addProperty("dimension", level.dimension().location().toString());
-            McAgent.WS.pushTopic(WsHub.TOPIC_BLOCKS, "block_place", data);
-        });
-
-        bus.addListener((net.neoforged.neoforge.event.level.BlockEvent.BreakEvent event) -> {
-            if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) return;
-            if (!event.getState().hasBlockEntity()) return;
-            com.google.gson.JsonObject data = Json.obj();
-            data.addProperty("pos", event.getPos().getX() + "," + event.getPos().getY() + "," + event.getPos().getZ());
-            data.addProperty("block", String.valueOf(
-                    net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(event.getState().getBlock())));
-            data.addProperty("dimension", level.dimension().location().toString());
-            data.addProperty("player", event.getPlayer() == null ? null : event.getPlayer().getName().getString());
-            McAgent.WS.pushTopic(WsHub.TOPIC_BLOCKS, "block_break", data);
-        });
-
-        bus.addListener((PlayerEvent.PlayerLoggedInEvent event) -> {
-            ChatLog.add(null, event.getEntity().getName().getString() + " joined", true);
-            McAgent.WS.pushEvent("player_join", GameBridge.snapshot());
-            // The greeting belongs here, not in ServerStartedEvent: on an
-            // integrated server the local player is added to the list only
-            // after the server has started.
-            // Only greet a human. The agent's own players log in through the same event,
-            // and telling them the bridge is ready is just noise.
-            if (AgentConfig.get().greetOnJoin && McAgent.running()
-                    && event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
-                    && !dev.mcagent.fakeplayer.FakePlayers.names().contains(
-                            player.getGameProfile().getName())) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                        "[mcagent] 桥接已就绪 · 127.0.0.1:" + McAgent.port() + " · MCP + WS 在线"));
-            }
+        bus.addListener((PlayerEvent.PlayerChangedDimensionEvent event) -> {
+            PlayerSelections.remove(event.getEntity().getUUID());
         });
 
         bus.addListener((PlayerEvent.PlayerLoggedOutEvent event) -> {
-            ChatLog.add(null, event.getEntity().getName().getString() + " left", true);
-            McAgent.WS.pushEvent("player_leave", GameBridge.snapshot());
-        });
-
-        bus.addListener((ServerChatEvent event) -> {
-            String player = event.getUsername();
-            String raw = event.getRawText();
-            // The agent speaks as a real player now (PlayerChatMessage), so its own
-            // lines can reach this listener. Recording one would put it in ChatLog,
-            // where mc_wait --untilChat matches any line regardless of the system
-            // flag - the agent would wake itself up on its own sentence.
-            if (dev.mcagent.fakeplayer.FakePlayers.names().contains(player)) return;
-            ChatLog.add(player, raw, false);
-            McAgent.WS.pushChat(player, raw, false);
+            PlayerSelections.remove(event.getEntity().getUUID());
         });
     }
 }

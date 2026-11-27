@@ -1,0 +1,205 @@
+{
+  "mod": "0.5.0-rc.3",
+  "minecraft": "1.21.1",
+  "neoforge": "21.1.264",
+  "model": "deepseek-flash",
+  "prompt": "帮我看看这排炉子怎么了",
+  "rounds": [
+    {
+      "round": "A",
+      "selected": {
+        "a": {
+          "x": 134,
+          "y": 110,
+          "z": 145
+        },
+        "b": {
+          "x": 137,
+          "y": 110,
+          "z": 145
+        },
+        "ready": true
+      },
+      "nearbyLitPositions": [
+        "134,110,141",
+        "135,110,141",
+        "136,110,141",
+        "137,110,141"
+      ],
+      "before": [
+        {
+          "position": "135,110,145",
+          "state": "minecraft:furnace[facing=north,lit=false]",
+          "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":35},id:\"minecraft:furnace\",x:135,y:110,z:145}",
+          "hopperState": "minecraft:hopper[enabled=true,facing=down]",
+          "hopperData": "{Items:[],TransferCooldown:0,id:\"minecraft:hopper\",x:135,y:111,z:145}",
+          "neighbor": {
+            "position": "135,111,146",
+            "state": "minecraft:air"
+          }
+        },
+        {
+          "position": "135,110,145",
+          "state": "minecraft:furnace[facing=north,lit=false]",
+          "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":35},id:\"minecraft:furnace\",x:135,y:110,z:145}",
+          "hopperState": "minecraft:hopper[enabled=true,facing=down]",
+          "hopperData": "{Items:[],TransferCooldown:0,id:\"minecraft:hopper\",x:135,y:111,z:145}",
+          "neighbor": {
+            "position": "135,111,146",
+            "state": "minecraft:air"
+          }
+        }
+      ],
+      "afterAnswer": {
+        "position": "135,110,145",
+        "state": "minecraft:furnace[facing=north,lit=false]",
+        "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":35},id:\"minecraft:furnace\",x:135,y:110,z:145}",
+        "hopperState": "minecraft:hopper[enabled=true,facing=down]",
+        "hopperData": "{Items:[],TransferCooldown:0,id:\"minecraft:hopper\",x:135,y:111,z:145}",
+        "neighbor": {
+          "position": "135,111,146",
+          "state": "minecraft:air"
+        }
+      },
+      "completedReadCalls": {
+        "mc_status": 1,
+        "mc_selection": 1,
+        "mc_block": 20,
+        "mc_block_entity": 6
+      },
+      "deniedCalls": [
+        "mc_command",
+        "mc_highlight"
+      ]
+    },
+    {
+      "round": "B",
+      "selected": {
+        "a": {
+          "x": 134,
+          "y": 110,
+          "z": 145
+        },
+        "b": {
+          "x": 137,
+          "y": 110,
+          "z": 145
+        },
+        "ready": true
+      },
+      "nearbyLitPositions": [
+        "134,110,141",
+        "135,110,141",
+        "136,110,141",
+        "137,110,141"
+      ],
+      "before": [
+        {
+          "position": "137,110,145",
+          "state": "minecraft:furnace[facing=north,lit=false]",
+          "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"},{Slot:1b,count:64,id:\"minecraft:coal\"},{Slot:2b,count:64,id:\"minecraft:iron_ingot\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":37},id:\"minecraft:furnace\",x:137,y:110,z:145}",
+          "hopperState": "minecraft:hopper[enabled=true,facing=down]",
+          "hopperData": "{Items:[],TransferCooldown:0,id:\"minecraft:hopper\",x:137,y:111,z:145}",
+          "neighbor": {
+            "position": "137,111,146",
+            "state": "minecraft:air"
+          }
+        },
+        {
+          "position": "137,110,145",
+          "state": "minecraft:furnace[facing=north,lit=false]",
+          "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"},{Slot:1b,count:64,id:\"minecraft:coal\"},{Slot:2b,count:64,id:\"minecraft:iron_ingot\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":37},id:\"minecraft:furnace\",x:137,y:110,z:145}",
+          "hopperState": "minecraft:hopper[enabled=true,facing=down]",
+          "hopperData": "{Items:[],TransferCooldown:0,id:\"minecraft:hopper\",x:137,y:111,z:145}",
+          "neighbor": {
+            "position": "137,111,146",
+            "state": "minecraft:air"
+          }
+        }
+      ],
+      "afterAnswer": {
+        "position": "137,110,145",
+        "state": "minecraft:furnace[facing=north,lit=false]",
+        "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"},{Slot:1b,count:64,id:\"minecraft:coal\"},{Slot:2b,count:64,id:\"minecraft:iron_ingot\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":37},id:\"minecraft:furnace\",x:137,y:110,z:145}",
+        "hopperState": "minecraft:hopper[enabled=true,facing=down]",
+        "hopperData": "{Items:[],TransferCooldown:0,id:\"minecraft:hopper\",x:137,y:111,z:145}",
+        "neighbor": {
+          "position": "137,111,146",
+          "state": "minecraft:air"
+        }
+      },
+      "completedReadCalls": {
+        "mc_status": 1,
+        "mc_block": 24,
+        "mc_block_entity": 10,
+        "mc_inventory": 1
+      },
+      "deniedCalls": [
+        "mc_highlight"
+      ]
+    },
+    {
+      "round": "C",
+      "selected": {
+        "a": {
+          "x": 134,
+          "y": 110,
+          "z": 145
+        },
+        "b": {
+          "x": 137,
+          "y": 110,
+          "z": 145
+        },
+        "ready": true
+      },
+      "nearbyLitPositions": [
+        "134,110,141",
+        "135,110,141",
+        "136,110,141",
+        "137,110,141"
+      ],
+      "before": [
+        {
+          "position": "134,110,145",
+          "state": "minecraft:furnace[facing=north,lit=false]",
+          "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:1b,count:64,id:\"minecraft:coal\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":31},id:\"minecraft:furnace\",x:134,y:110,z:145}",
+          "hopperState": "minecraft:hopper[enabled=false,facing=down]",
+          "hopperData": "{Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"}],TransferCooldown:0,id:\"minecraft:hopper\",x:134,y:111,z:145}",
+          "neighbor": {
+            "position": "134,111,146",
+            "state": "minecraft:redstone_block"
+          }
+        },
+        {
+          "position": "134,110,145",
+          "state": "minecraft:furnace[facing=north,lit=false]",
+          "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:1b,count:64,id:\"minecraft:coal\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":31},id:\"minecraft:furnace\",x:134,y:110,z:145}",
+          "hopperState": "minecraft:hopper[enabled=false,facing=down]",
+          "hopperData": "{Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"}],TransferCooldown:0,id:\"minecraft:hopper\",x:134,y:111,z:145}",
+          "neighbor": {
+            "position": "134,111,146",
+            "state": "minecraft:redstone_block"
+          }
+        }
+      ],
+      "afterAnswer": {
+        "position": "134,110,145",
+        "state": "minecraft:furnace[facing=north,lit=false]",
+        "furnaceData": "{BurnTime:0,CookTime:0,CookTimeTotal:200,Items:[{Slot:1b,count:64,id:\"minecraft:coal\"}],RecipesUsed:{\"minecraft:iron_ingot_from_smelting_iron_ore\":31},id:\"minecraft:furnace\",x:134,y:110,z:145}",
+        "hopperState": "minecraft:hopper[enabled=false,facing=down]",
+        "hopperData": "{Items:[{Slot:0b,count:64,id:\"minecraft:iron_ore\"}],TransferCooldown:0,id:\"minecraft:hopper\",x:134,y:111,z:145}",
+        "neighbor": {
+          "position": "134,111,146",
+          "state": "minecraft:redstone_block"
+        }
+      },
+      "completedReadCalls": {
+        "mc_status": 1,
+        "mc_blocks": 2,
+        "mc_block_entity": 16
+      },
+      "deniedCalls": []
+    }
+  ]
+}

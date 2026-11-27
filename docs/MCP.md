@@ -1,145 +1,28 @@
-# MCP 接口参考
+# MCP 接入与世界操作
 
-> 这份文档面向 **agent / 脚本作者**。想了解这个 mod 是什么、要不要装，看 [../README.md](../README.md)。
+## 会话
 
-## 端点
+服务接受带 Bearer 凭据的 `POST /mcp`。客户端用 JSON-RPC `initialize` 建立会话，保存响应头 `Mcp-Session-Id`，后续请求带上它。发送 `notifications/initialized` 后通过 `tools/list` 获取本版本的工具和参数。退出时使用带相同凭据及会话头的 `DELETE /mcp`。工具调用返回的 `isError` 和文本包含实际执行结果。
 
-| 通道 | 端点 | 鉴权 |
-|---|---|---|
-| MCP (Streamable HTTP) | `POST /mcp` | `Authorization: Bearer <token>` + `Accept: application/json, text/event-stream` |
-| WebSocket | `GET /ws` | `Authorization: Bearer <token>` |
-| 健康探针 | `GET /health` | **免鉴权** |
+多个客户端可以同时读取。第一个需要独占操作的请求取得操作权，所有者调用工具会续期。写会话空闲约 120 秒会撤销，编辑作业另有 15 秒 keepalive。停止、世界切换、配置重载或写会话关闭会撤销旧操作。收到 404 后重新初始化，重新检查世界、任务和实际方块，再根据玩家委托决定如何继续。普通会话空闲 30 分钟后过期。
 
-默认 `127.0.0.1:38121`。token 在 `config/agentinminecraft.json`，48 位 hex。
+## 从玩家的视角调查
 
-`/health` 是唯一免鉴权端点，专门用来区分两种失败：
+玩家对准对应目标执行 `/agent select block`、`/agent select entity`，或用 `/agent select corner a`、`/agent select corner b` 框选区域。`/agent select show` 查看，`/agent select clear` 清除。管理权限要求为 2 级。玩家在外部 Agent 中提问。`mc_status` 同时给出真人 UUID 和该玩家现有的 `selection`。未选择时省略此字段。也可以用 `mc_selection` 单独读取同一份选区。多人时应先明确请求者。世界和选区各带版本标识，离开或换维度会清除个人选区。
 
-- 连不上 → 游戏没起来 / 端口被占
-- 连上但 MCP 返回 401 → token 不对
+| 用途 | 入口 |
+| --- | --- |
+| 观察世界 | `mc_block`、`mc_blocks`、`mc_block_entity`、`mc_entities`、`mc_inventory` |
+| 核对实例知识 | `mc_knowledge`、`mc_recipe`、`mc_tags`、`mc_item_inspect`、`mc_command_inspect` |
+| 跨 tick 观察状态 | `mc_observe`、`mc_observe_wait`、`mc_watch`、`mc_watch_list` |
+| 执行可核验编辑 | `mc_edit_preview`、`mc_edit_preview_selection`、`mc_edit_apply`、`mc_edit_start` |
+| 查历史和撤销 | `mc_edit_jobs`、`mc_undo_records`、`mc_undo` |
+| 工程身体 | 用 `tools/list` 查看 `mc_player_*` 的移动、跟随、建造和交互工具 |
 
-MCP 无状态：不发 `Mcp-Session-Id`。请求体上限 8 MiB（含 chunked 累计）。
+遇到陌生模组，Agent 可以基于安装版本和注册 ID 自行查阅资料，再用当前世界的配方、标签和方块数据核对。各模组通过通用接口暴露的信息量会有差异。
 
-## 三级模式闸门
+## 权限与恢复
 
-调用任何会改变游戏状态的工具前，先理解这三层，**否则会收到看似莫名其妙的拒绝**：
+`allowWrite` 控制直接编辑，默认关闭。`allowCommands` 独立控制 `mc_command`，默认开启。开着命令权限便可以执行有副作用的原版或模组指令。只调查的委托应按调查范围操作。FakePlayer 的身体交互使用独立的游戏动作。原生命令产生的改动不会自动进入模组的撤销记录。
 
-| 闸门 | 位置 | 拒绝时的消息 |
-|---|---|---|
-| `enabled=false` | 启动时 | 根本连不上（端口不监听） |
-| `allowWrite=false` | 世界写入类工具 | `world writes are disabled; set allowWrite=true ...` |
-| `allowCommands=false` | `mc_command`、WS `exec` | `commands disabled by config (allowCommands=false)` |
-| chat 模式 | 见下表 | `chat mode does not edit the world directly ...` |
-
-chat 模式（游戏内 `/agent chat`）**拒绝**：
-
-```
-mc_set_block   mc_fill   mc_command   mc_undo   mc_player_teleport   WS {"type":"exec"}
-```
-
-chat 模式**允许**：所有读取工具、`mc_player_walk/halt/look/hold/spawn/despawn`、
-`mc_player_break/place/use/attack`、`mc_chat`。
-
-**agent 无法自行退出 chat 模式**——只有人类能在游戏内输入 `/agent work`。
-
-## 工具清单（39）
-
-### 读取
-
-| 工具 | 作用 | 关键参数 |
-|---|---|---|
-| `mc_status` | 版本、TPS、维度、玩家列表、桥接状态（含 `mode`） | — |
-| `mc_blocks` | 区域方块扫描，上限 8000 行 | `x1..z2`、`includeAir` |
-| `mc_block` | 单个方块 | `x,y,z` |
-| `mc_block_entity` | 方块实体 NBT（机器、容器） | `x,y,z` |
-| `mc_entities` | 附近实体：类型、位置、血量 | `radius`、`type`、`player` |
-| `mc_inventory` | 玩家背包 | `player` |
-| `mc_logs` | `latest.log` 过滤 | `filter`、`lines` |
-| `mc_screenshot` | 抓主渲染目标（**仅客户端**） | `save` |
-
-### 注册表
-
-| 工具 | 作用 |
-|---|---|
-| `mc_recipe` | 某物品由哪些配方产出 / 被哪些消耗 |
-| `mc_tags` | 物品/方块的 tag 归属 |
-
-### 任务书（需 FTB Quests，否则不注册）
-
-`mc_quests`（章节树 + 完成状态）、`mc_quest`（单任务详情）
-
-### 操作
-
-| 工具 | 作用 | 注意 |
-|---|---|---|
-| `mc_command` | 执行命令并捕获输出 | 权限默认取玩家 OP 等级，最低 2 |
-| `mc_chat` | 以 agent 身份发言 | 有身体时走真实玩家聊天，否则回退系统行 |
-| `mc_chat_read` | 读最近聊天 | 可配 `mc_wait --untilChat` |
-| `mc_highlight` | 粒子描边 | 服务端每 8 tick 重发，`seconds` 是真秒数 |
-| `mc_wait` | 等 N tick 或等一句聊天 | 超时返回 `reason:"timeout"` |
-| `mc_fill` | 区域填充 | 上限 4096 格，填充前记录旧状态与方块实体 NBT |
-| `mc_undo` | 回滚 | 栈深 16，只覆盖 `mc_fill` 的改动 |
-| `mc_history` | 列出可撤销操作 | — |
-| `mc_watch` / `mc_watch_list` | 监视方块实体 NBT 变化 | 变化推 WS `watcher` 事件 |
-| `mc_set_block` | 单方块设置 | 不进撤销栈 |
-
-### 身体
-
-| 工具 | 作用 | 关键参数 |
-|---|---|---|
-| `mc_player_spawn` | 生成一具玩家（名字来自 `playerName`，**参数里的 name 已忽略**） | `x,y,z`、`yaw`、`pitch` |
-| `mc_player_despawn` | 移除，并停走、取消挖掘 | `name` |
-| `mc_player_list` | 位置、血量、手持、是否在走 | — |
-| `mc_player_walk` | 自动寻路走到坐标 | `x,y,z`、`sprint` |
-| `mc_player_halt` | 停走 | `name` |
-| `mc_player_look` | 转向 | `yaw`、`pitch` |
-| `mc_player_hold` | 切换快捷栏槽位 | `slot` |
-| `mc_player_teleport` | 传送（**chat 模式拒绝**） | `x,y,z` |
-| `mc_player_break` | 挖掘，按真实时长 | `x,y,z`、`face` |
-| `mc_player_place` | 右键方块面：放方块/开箱子/拉杆 | `x,y,z`、`face` |
-| `mc_player_use` | 右键空气：吃、喝、扔、射 | `name` |
-| `mc_player_attack` | 攻击最近的非玩家活体，或指定 `entityId` | `entityId`、`radius` |
-
-`mc_player_walk` 的返回值会带路线摘要，例如 `(8 hops, 2 jump(s))`。
-`no route found, steering straight` 表示没规划出路线，正在直冲——通常意味着目标不可达。
-
-## WebSocket 协议
-
-客户端 → 服务端：
-
-```json
-{"type":"say","text":"..."}
-{"type":"say_json","component":{...}}
-{"type":"exec","command":"..."}
-{"type":"state"}
-{"type":"sub","topics":["blocks"]}
-{"type":"unsub","topics":["blocks"]}
-{"type":"ping"}
-```
-
-服务端 → 客户端：
-
-```json
-{"type":"hello","state":{...},"topics":["chat","events"]}
-{"type":"chat","player":"...","text":"...","system":false}
-{"type":"event","kind":"player_join|player_leave|server_started|server_stopping","data":{...}}
-{"type":"watcher","data":{"label":"...","pos":"x,y,z","status":"errored","before":"...","after":"..."}}
-{"type":"block_place","data":{"pos":"x,y,z","block":"...","dimension":"..."}}
-{"type":"block_break","data":{"pos":"x,y,z","block":"...","player":"..."}}
-{"type":"exec_result","command":"...","output":"..."}
-{"type":"agent_cmd","cmd":"work|chat|new|session","arg":"...","mode":"work|chat","by":"..."}
-```
-
-**主题**：`chat` 与 `events` 默认订阅；`blocks` 需要显式 `sub`。
-`block_place` / `block_break` 只推**带方块实体**的方块（机器、容器）。
-
-## 写给 agent 的几条注意事项
-
-1. **所有世界读取都跳服务端主线程**。不要高频轮询 `mc_blocks`，单次 8000 行是有代价的。
-2. **`mc_wait` 是同步的正确方式**。挖方块要等进度、玩家反应要等聊天，用 `mc_wait` 而不是自己睡眠。
-3. **改写世界前先备份**：`mc_fill` 会自动记录，但 `mc_set_block` 不进撤销栈。
-4. **拒绝不是错误**。看到 chat 模式的消息，说明人类收紧了权限，不要反复重试同一调用。
-5. **`mc_screenshot` 可能不可用**（专用服务器）。先查 `mc_status.dist`。
-6. **身体是真实玩家**：它会掉血、会被其他模组影响、会踩坏作物。不要把它当无实体代理用。
-7. **地面高度是 `玩家 y - 1`，不是 `玩家 y`**。`mc_status` 报的是脚的位置，也就是下面那块方块的**顶面**：
-   在 `y=-60` 放地板，实际会比草地高一格，房子会悬空。
-   建造前先 `mc_block` 查一下脚下那格的 y，用它当地板层。
+需要改方块时先预览，将返回的 `planId`、`worldSessionId` 和 `planRevision` 交给应用工具，执行后读回方块。撤销前可查询记录，遇到后续更改产生的冲突会保留记录。`/agent stop` 或 `mc_control_stop` 会停止编辑、观察与身体动作。真人执行 `/agent resume` 后可以发起新任务。`/agent config` 查看配置，`/agent config reload` 重新载入。

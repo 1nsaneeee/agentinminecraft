@@ -128,11 +128,23 @@ public final class WebSocketConn {
 
     public void close() {
         if (!open) return;
-        open = false;
         try {
             synchronized (writeLock) {
+                if (!open) return;
+                open = false;
                 writeFrame(0x8, new byte[0]);
             }
+        } catch (IOException ignored) {
+        } finally {
+            abort();
+        }
+    }
+
+    /** Closes the raw socket without waiting for an in-flight frame write. */
+    void abort() {
+        open = false;
+        try {
+            req.socket.close();
         } catch (IOException ignored) {
         }
     }

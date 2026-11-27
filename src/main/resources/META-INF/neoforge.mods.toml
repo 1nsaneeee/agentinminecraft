@@ -4,31 +4,27 @@ license="MIT"
 
 [[mods]]
 modId="agentinminecraft"
-version="0.3.0"
+version="0.5.0-rc.3"
 displayName="Agent In Minecraft"
 authors="TomUWU"
 description='''
-Agent In Minecraft exposes the running game to an external AI agent: an MCP
-server over HTTP (streamable-http) plus a live WebSocket channel for chat and
-game events.
-
-Also gives the agent a body: a real server player with no client attached,
-which walks with a jump-aware path, mines at vanilla speed, places, uses and
-attacks. Loopback-only and token protected by default; chat mode keeps the
-body's hands but refuses direct world edits.
+Connect an external agent to a running Minecraft world through MCP over HTTP.
+Inspect selections, recipes, machine state and installed mods. Perform authorized
+edits, verify their results and undo supported changes. The server also exposes
+player-like bodies for physical tasks. Local connections require the bridge token.
 '''
 
 [[dependencies.agentinminecraft]]
 modId="neoforge"
 type="required"
-versionRange="[21.1.0,)"
+versionRange="[21.1.0,21.2)"
 ordering="NONE"
 side="BOTH"
 
 [[dependencies.agentinminecraft]]
 modId="minecraft"
 type="required"
-versionRange="[1.21.1,1.22)"
+versionRange="[1.21.1]"
 ordering="NONE"
 side="BOTH"
 

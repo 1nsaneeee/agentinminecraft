@@ -8,16 +8,15 @@ import com.google.gson.JsonParser;
 /**
  * Model Context Protocol over "Streamable HTTP" (JSON-RPC 2.0 on POST).
  *
- * <p>Stateless: every POST is answered with {@code application/json}. No
- * {@code Mcp-Session-Id} is issued, which the reference clients accept, and the
- * standalone SSE channel (GET) is refused with 405 so clients fall back to
- * plain request/response.</p>
+ * <p>Initialization issues an HTTP session. Only sessions that operate on the world
+ * acquire its write lease. Readers do not take ownership from other clients.</p>
  */
 public final class McpServer {
     private static final String DEFAULT_PROTOCOL = "2025-06-18";
     private static final String[] KNOWN_PROTOCOLS = {"2025-06-18", "2025-03-26", "2024-11-05"};
 
     private final ToolRegistry tools;
+    private final McpSessions sessions = new McpSessions(McpSessions::now, AgentControl::epoch);
 
     public McpServer(ToolRegistry tools) {
         this.tools = tools;
@@ -39,10 +38,47 @@ public final class McpServer {
             return;
         }
 
+        String header = req.header(McpSessions.HEADER);
+        if (parsed.isJsonObject() && "initialize".equals(Json.str(parsed.getAsJsonObject(), "method", null))) {
+            if (header != null || !parsed.getAsJsonObject().has("id") || parsed.getAsJsonObject().get("id").isJsonNull()) {
+                res.text(400, "initialize requires a request id and no existing session");
+                return;
+            }
+            JsonObject response = handleOne(parsed);
+            if (response != null && response.has("result")) {
+                try { res.header(McpSessions.HEADER, sessions.open().id); }
+                catch (IllegalStateException full) { res.text(503, full.getMessage()); return; }
+            }
+            res.json(200, response);
+            return;
+        }
+        McpSessions.Session session = requireSession(req, res);
+        if (session == null) return;
+        AgentControl.inSession(session, () -> { dispatch(parsed, res); return null; });
+    }
+
+    private McpSessions.Session requireSession(HttpCore.Request req, HttpCore.Response res) {
+        String header = req.header(McpSessions.HEADER);
+        if (header == null || header.isBlank()) { res.text(400, "Mcp-Session-Id required; initialize first"); return null; }
+        McpSessions.Session session = sessions.lookup(header);
+        if (session == null) res.text(404, "MCP session ended; initialize a new session");
+        return session;
+    }
+
+    public void handleDelete(HttpCore.Request req, HttpCore.Response res) {
+        McpSessions.Session session = requireSession(req, res);
+        if (session == null) return;
+        sessions.close(session);
+        if (GameBridge.running()) GameBridge.onServer(() -> { ExternalTasks.endSession(session); return null; }, 5000);
+        res.status(204);
+    }
+
+    private void dispatch(JsonElement parsed, HttpCore.Response res) {
         if (parsed.isJsonArray()) {
             JsonArray out = Json.arr();
             for (JsonElement el : parsed.getAsJsonArray()) {
-                JsonObject one = handleOne(el);
+                JsonObject one = el.isJsonObject() && "initialize".equals(Json.str(el.getAsJsonObject(), "method", null))
+                        ? error(el.getAsJsonObject().get("id"), -32600, "initialize must be sent separately") : handleOne(el);
                 if (one != null) out.add(one);
             }
             if (out.isEmpty()) {
@@ -94,9 +130,12 @@ public final class McpServer {
                     info.addProperty("version", McAgent.VERSION);
                     result.add("serverInfo", info);
                     result.addProperty("instructions",
-                            "Live bridge into a running Minecraft client. Coordinates are block coordinates; "
+                            "Live bridge into a running Minecraft game or dedicated server. Coordinates are block coordinates; "
                                     + "dimension defaults to the executing player's level. Read tools are always "
-                                    + "available; mutating tools require allowWrite=true in config/mcagent.json.");
+                                    + "available; direct editing tools require allowWrite=true in config/agentinminecraft.json. "
+                                    + "Commands use the independent allowCommands permission. Your MCP session owns its writes. "
+                                    + "Use mc_status to identify the requesting player and mc_selection to read their selection. "
+                                    + "Use the current server's recipes, tags and observed machine state to check version-specific information.");
                     return result(id, result);
                 }
                 case "ping":
@@ -142,7 +181,8 @@ public final class McpServer {
         if (args == null) args = Json.obj();
         McpResult out;
         try {
-            out = tool.call(args);
+            if (params.has("_meta") && !params.get("_meta").isJsonObject()) return McpResult.error("_meta must be an object").toJson();
+            out = tools.call(name, args, Json.sub(params, "_meta"));
         } catch (ToolFailure e) {
             out = McpResult.error(e.getMessage());
         } catch (Exception e) {

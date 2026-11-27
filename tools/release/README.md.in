@@ -1,0 +1,13 @@
+# Agent In Minecraft
+
+把 Minecraft 世界接入外部 Agent。玩家在游戏里选中要讨论的方块、实体或区域，然后在自己的 Agent 里提问。Agent 可以查现场、核对当前实例的模组和配方，并在得到委托后编辑世界。
+
+适用于 Minecraft Java 1.21.1、NeoForge 21.1.x、Java 21。客户端内置单人世界或独立服务器均可安装。连接使用带 Bearer token 的 MCP Streamable HTTP。模型与对话由你使用的外部 Agent 提供。
+
+## 开始使用
+
+1. 解压发布包，将包内 JAR 放进游戏目录的 `mods`，或按[安装说明](docs/AI-INSTALL.md)用随包脚本安装。
+2. 启动世界，在外部 Agent 中配置实例的 MCP 地址和凭据。
+3. 有管理权限的玩家分别对准两端方块执行 `/agent select corner a` 和 `/agent select corner b`。在外部对话中描述你要检查的事。多人在线时告诉 Agent 自己的游戏名。
+
+外部 Agent 可以读取方块与方块实体、背包、配方、标签、模组版本及运行状态。工程操作包含选区预览、应用、读回、撤销和 FakePlayer 的移动与交互。`/agent stop` 可在游戏内终止操作。权限、会话与使用示例见 [MCP 接入与工具](docs/MCP.md)。

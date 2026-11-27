@@ -6,7 +6,7 @@ modId="mcagent_qa"
 version="1.0.0"
 displayName="MC Agent Regression Tests"
 [[dependencies.mcagent_qa]]
-modId="mcagent"
+modId="agentinminecraft"
 type="required"
 versionRange="[0.3.0,)"
 ordering="AFTER"

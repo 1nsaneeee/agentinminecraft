@@ -2,9 +2,11 @@
 # Builds the optional QA mod. Installation is deliberately a separate step.
 $ErrorActionPreference = 'Stop'
 . (Join-Path (Split-Path $PSScriptRoot -Parent) 'build.ps1') -NoInstall
-$qaClasses = Join-Path $root 'build\live-test-classes'
+$qaClasses = Join-Path $root ('build\live-test-classes-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $qaClasses -Force | Out-Null
-& "$jdk\bin\javac.exe" -proc:none -encoding UTF-8 -cp "$classes;$cp" -d $qaClasses (Join-Path $PSScriptRoot 'live-tests\LiveRegression.java')
+$qaSources = @('LiveRegression.java', 'BridgeReloadFixture.java') |
+    ForEach-Object { Join-Path $PSScriptRoot "live-tests\$_" }
+& "$jdk\bin\javac.exe" -proc:none -encoding UTF-8 -cp "$classes;$cp" -d $qaClasses $qaSources
 if ($LASTEXITCODE -ne 0) { throw 'live regression compilation failed' }
 Copy-Item (Join-Path $PSScriptRoot 'live-tests\resources\*') $qaClasses -Recurse -Force
 & "$jdk\bin\jar.exe" --create --file (Join-Path $root 'build\mcagent-qa.jar') -C $qaClasses .

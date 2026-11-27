@@ -16,6 +16,7 @@ public final class AgentMode {
     public enum Mode { WORK, CHAT }
 
     private static volatile Mode current = Mode.WORK;
+    private static volatile long revision;
 
     private AgentMode() {}
 
@@ -24,8 +25,12 @@ public final class AgentMode {
     }
 
     public static void set(Mode mode) {
-        current = mode == null ? Mode.WORK : mode;
+        Mode next = mode == null ? Mode.WORK : mode;
+        if (current != next) revision++;
+        current = next;
     }
+
+    public static long revision() { return revision; }
 
     public static boolean isChat() {
         return current == Mode.CHAT;

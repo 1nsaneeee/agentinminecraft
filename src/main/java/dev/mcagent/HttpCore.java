@@ -16,12 +16,15 @@ import java.net.SocketTimeoutException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -137,6 +140,8 @@ public final class HttpCore implements AutoCloseable {
     private record Route(String method, String path, Handler handler) {}
 
     private final ServerSocket serverSocket;
+    private final Object lifecycleLock = new Object();
+    private final Set<Socket> connections = new HashSet<>();
     private final List<Route> routes = new ArrayList<>();
     private final AtomicInteger threadSeq = new AtomicInteger();
     private final ExecutorService pool = Executors.newCachedThreadPool(r -> {
@@ -145,6 +150,7 @@ public final class HttpCore implements AutoCloseable {
         return t;
     });
     private volatile boolean closed;
+    private boolean started;
 
     public HttpCore(String host, int port) throws IOException {
         this.serverSocket = new ServerSocket();
@@ -161,6 +167,10 @@ public final class HttpCore implements AutoCloseable {
     }
 
     public void start() {
+        synchronized (lifecycleLock) {
+            if (closed || started) return;
+            started = true;
+        }
         Thread acceptor = new Thread(this::acceptLoop, "mcagent-accept");
         acceptor.setDaemon(true);
         acceptor.start();
@@ -170,7 +180,24 @@ public final class HttpCore implements AutoCloseable {
         while (!closed) {
             try {
                 Socket socket = serverSocket.accept();
-                pool.execute(() -> serve(socket));
+                boolean submitted = false;
+                RejectedExecutionException rejected = null;
+                // Registration and submission share close's boundary: a socket
+                // is either in its snapshot or rejected without running a handler.
+                synchronized (lifecycleLock) {
+                    if (!closed) {
+                        connections.add(socket);
+                        try {
+                            pool.execute(() -> serve(socket));
+                            submitted = true;
+                        } catch (RejectedExecutionException e) {
+                            connections.remove(socket);
+                            rejected = e;
+                        }
+                    }
+                }
+                if (!submitted) closeSocket(socket);
+                if (rejected != null && !closed) McAgent.LOG.warn("[mcagent] connection submission failed: {}", rejected.toString());
             } catch (IOException e) {
                 if (!closed) McAgent.LOG.warn("[mcagent] accept failed: {}", e.toString());
                 if (serverSocket.isClosed()) return;
@@ -185,9 +212,9 @@ public final class HttpCore implements AutoCloseable {
             InputStream in = new BufferedInputStream(socket.getInputStream(), 16384);
             OutputStream out = new BufferedOutputStream(socket.getOutputStream(), 16384);
             try {
-                while (true) {
+                while (!closed && !socket.isClosed()) {
                     Request req = readRequest(socket, in, out);
-                    if (req == null) return;
+                    if (req == null || closed) return;
                     Response res = new Response();
                     try {
                         dispatch(req, res);
@@ -216,6 +243,11 @@ public final class HttpCore implements AutoCloseable {
             try {
                 socket.close();
             } catch (IOException ignored) {
+            }
+        } finally {
+            closeSocket(socket);
+            synchronized (lifecycleLock) {
+                connections.remove(socket);
             }
         }
     }
@@ -363,11 +395,25 @@ public final class HttpCore implements AutoCloseable {
 
     @Override
     public void close() {
-        closed = true;
+        List<Socket> owned;
+        synchronized (lifecycleLock) {
+            if (closed) return;
+            closed = true;
+            owned = new ArrayList<>(connections);
+            connections.clear();
+        }
         try {
             serverSocket.close();
         } catch (IOException ignored) {
         }
+        // Interrupting workers does not unblock Socket InputStream reads,
+        // especially after an upgrade disabled the HTTP read timeout.
+        for (Socket socket : owned) closeSocket(socket);
         pool.shutdownNow();
+    }
+
+    private static void closeSocket(Socket socket) {
+        try { socket.close(); }
+        catch (IOException ignored) { }
     }
 }

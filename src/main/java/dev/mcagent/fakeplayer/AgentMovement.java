@@ -42,6 +42,7 @@ public final class AgentMovement {
 
     /** Mutable walk state: the route, how far along it we are, and the stuck detector. */
     private static final class Walk {
+        final String actionId;
         final Vec3 target;
         final boolean sprint;
         final int startedAt;
@@ -53,7 +54,8 @@ public final class AgentMovement {
         double lastZ;
         int jumpTicks;
 
-        Walk(Vec3 target, boolean sprint, int startedAt, List<AgentNav.Hop> hops) {
+        Walk(String actionId, Vec3 target, boolean sprint, int startedAt, List<AgentNav.Hop> hops) {
+            this.actionId = actionId;
             this.target = target;
             this.sprint = sprint;
             this.startedAt = startedAt;
@@ -69,7 +71,14 @@ public final class AgentMovement {
     private AgentMovement() {}
 
     public static void start(ServerPlayer player, Vec3 target, boolean sprint, int now) {
-        WALKS.put(player.getUUID(), new Walk(target, sprint, now, plan(player, target)));
+        stop(player);
+        String id = dev.mcagent.ActionJournal.start(player.getUUID().toString(), "walk", now);
+        WALKS.put(player.getUUID(), new Walk(id, target, sprint, now, plan(player, target)));
+    }
+
+    public static String actionId(ServerPlayer player) {
+        Walk walk = WALKS.get(player.getUUID());
+        return walk == null ? null : walk.actionId;
     }
 
     private static List<AgentNav.Hop> plan(ServerPlayer player, Vec3 target) {
@@ -87,6 +96,7 @@ public final class AgentMovement {
             return false;
         }
         release(player);
+        finish(walk, "cancelled", "stopped_or_replaced");
         return true;
     }
 
@@ -145,11 +155,15 @@ public final class AgentMovement {
         while (it.hasNext()) {
             Map.Entry<UUID, Walk> entry = it.next();
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
-            if (player == null) {
+            if (player == null || !player.isAlive()) {
+                if (player != null) release(player);
+                finish(entry.getValue(), "failed", "body_unavailable");
                 it.remove();
                 continue;
             }
             if (!drive(player, entry.getValue(), now)) {
+                // drive records specific failures; terminal records cannot be overwritten.
+                finish(entry.getValue(), "succeeded", "arrived");
                 it.remove();
             }
         }
@@ -159,6 +173,7 @@ public final class AgentMovement {
     private static boolean drive(ServerPlayer player, Walk walk, int now) {
         if (now - walk.startedAt > TIMEOUT_TICKS) {
             release(player);
+            finish(walk, "timed_out", "walk_timeout");
             return false;
         }
         if (walk.still > STUCK_TICKS) {
@@ -167,13 +182,18 @@ public final class AgentMovement {
                 walk.hops = plan(player, walk.target);
                 walk.index = 0;
             } else {
-                walk.hops = null;      // give up on the route, steer at the target
+                release(player);
+                finish(walk, "failed", "stuck_after_replanning");
+                return false;
             }
         }
 
         if (walk.hops != null) {
             if (walk.index >= walk.hops.size()) {
                 release(player);
+                if (player.position().distanceToSqr(walk.target) > 2.25) {
+                    finish(walk, "failed", "route_ended_short_of_target");
+                }
                 return false;
             }
             return followHop(player, walk);
@@ -321,7 +341,14 @@ public final class AgentMovement {
         player.setSprinting(false);
     }
 
+    private static void finish(Walk walk, String status, String reason) {
+        dev.mcagent.ActionJournal.finish(walk.actionId, status, reason);
+    }
+
     public static void stopAll(MinecraftServer server) {
+        for (Walk walk : WALKS.values()) {
+            finish(walk, "cancelled", "world_stopped");
+        }
         for (UUID id : WALKS.keySet()) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player != null) {

@@ -8,19 +8,27 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Locale;
 
-/** Static facade: owns the HTTP server, the MCP endpoint and the WebSocket hub. */
+/** Static facade: owns the HTTP server, the MCP endpoint and its connection generation. */
 public final class McAgent {
     public static final String MOD_ID = "agentinminecraft";
-    public static final String VERSION = "0.3.2";
+    public static final String VERSION = "0.5.0-rc.3";
     public static final Logger LOG = LoggerFactory.getLogger("mcagent");
 
-    public static final ToolRegistry TOOLS = new ToolRegistry();
-    public static final WsHub WS = new WsHub();
+    public static final ToolRegistry TOOLS = new ToolRegistry(AgentControl::invoke);
+    private static volatile long generation;
+    public static long transportGeneration() { return generation; }
 
     private static HttpCore http;
     private static volatile boolean toolsRegistered;
 
     private McAgent() {}
+
+    public static synchronized void ensureTools() {
+        if (!toolsRegistered) {
+            Tools.registerAll(TOOLS);
+            toolsRegistered = true;
+        }
+    }
 
     public static synchronized void startHttp() {
         if (http != null) return;
@@ -29,43 +37,37 @@ public final class McAgent {
             LOG.info("[mcagent] disabled by config; not starting HTTP bridge");
             return;
         }
-        if (!toolsRegistered) {
-            Tools.registerAll(TOOLS);
-            toolsRegistered = true;
-        }
+        ensureTools();
         try {
             HttpCore core = new HttpCore(cfg.host, cfg.port);
             McpServer mcp = new McpServer(TOOLS);
+            long transportGeneration = generation;
 
             core.route("GET", "/health", (req, res) -> res.json(200, health()));
 
             core.route("POST", "/mcp", (req, res) -> {
                 if (!authorize(req, res)) return;
-                mcp.handlePost(req, res);
+                AgentControl.inTransport(transportGeneration, () -> { mcp.handlePost(req, res); return null; });
             });
             core.route("GET", "/mcp", (req, res) -> {
                 if (!authorize(req, res)) return;
-                res.header("Allow", "POST").text(405, "standalone SSE stream not offered; POST JSON-RPC to /mcp");
+                res.header("Allow", "POST, DELETE").text(405, "standalone SSE stream not offered; POST JSON-RPC to /mcp");
             });
             core.route("DELETE", "/mcp", (req, res) -> {
                 if (!authorize(req, res)) return;
-                res.status(204);
-            });
-
-            core.route("GET", "/ws", (req, res) -> {
-                if (!authorize(req, res)) return;
-                WsHub.upgrade(req, res);
+                AgentControl.inTransport(transportGeneration, () -> { mcp.handleDelete(req, res); return null; });
             });
 
             core.start();
             http = core;
-            LOG.info("[mcagent] bridge listening on {}:{}  (mcp: POST /mcp, live channel: GET /ws)", cfg.host, core.port());
+            LOG.info("[mcagent] bridge listening on {}:{}  (MCP: /mcp)", cfg.host, core.port());
         } catch (IOException e) {
             LOG.error("[mcagent] could not bind {}:{} - {}", cfg.host, cfg.port, e.toString());
         }
     }
 
     public static synchronized void stopHttp() {
+        generation++;
         if (http != null) {
             http.close();
             http = null;
@@ -97,7 +99,7 @@ public final class McAgent {
         if (provided == null) provided = req.header("x-mcagent-token");
         if (token.equals(provided)) return true;
         res.header("WWW-Authenticate", "Bearer realm=\"mcagent\"").text(401,
-                "unauthorized: send 'Authorization: Bearer <token>' (token is in config/mcagent.json)");
+                "unauthorized: send 'Authorization: Bearer <token>' (token is in config/agentinminecraft.json)");
         return false;
     }
 
@@ -110,15 +112,28 @@ public final class McAgent {
         o.addProperty("bind", cfg.host + ":" + cfg.port);
         JsonArray endpoints = Json.arr();
         endpoints.add("POST /mcp");
-        endpoints.add("GET /ws");
+        endpoints.add("DELETE /mcp");
         o.add("endpoints", endpoints);
-        o.addProperty("wsClients", WS.size());
         return o;
     }
 
-    public static synchronized void reloadConfig() {
-        stopHttp();
-        AgentConfig.load(dev.mcagent.util.Dist2.configDir());
-        startHttp();
+    public static boolean reloadConfig() {
+        return GameBridge.onServer(() -> {
+            // Parsing finishes before changing the live transport. A malformed file
+            // cannot replace restrictive settings with defaults or overwrite its token.
+            if (!AgentConfig.reload()) return false;
+            synchronized (McAgent.class) {
+                stopHttp();
+                // Close before boundary broadcasts: a non-reading peer must not
+                // prevent the main thread from reaching transport revocation.
+                AgentControl.boundary("config_reloaded");
+                startHttp();
+            }
+            if (running()) AgentDiscovery.publish();
+            else AgentDiscovery.withdraw();
+            if (AgentConfig.get().enabled && !running())
+                throw new IllegalStateException("configuration applied, but bridge restart failed; inspect the bind error and retry after correcting the configuration");
+            return true;
+        }, 10000);
     }
 }

@@ -13,10 +13,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$version = '0.3.2'
+$version = (Select-String -Path (Join-Path $root 'src\main\java\dev\mcagent\McAgent.java') `
+        -Pattern 'public static final String VERSION = "([^"]+)";' |
+    Select-Object -First 1).Matches[0].Groups[1].Value
+if (-not $version) { throw 'could not read McAgent.VERSION' }
+$metadataVersion = (Select-String -Path (Join-Path $root 'src\main\resources\META-INF\neoforge.mods.toml') `
+        -Pattern '^version="([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+if (-not $metadataVersion) { throw 'could not read mod version from neoforge.mods.toml' }
+if ($metadataVersion -ne $version) {
+    throw "mod version mismatch: McAgent.VERSION is '$version', neoforge.mods.toml says '$metadataVersion'"
+}
 $name = 'AgentInMinecraft'
-$lib = 'C:\Users\CJ\AppData\Roaming\PrismLauncher\libraries'
-$jdk = 'C:\Program Files\Java\jdk-21.0.10'
+$lib = if ($env:MCAGENT_PRISM_LIBRARIES) { $env:MCAGENT_PRISM_LIBRARIES } else { Join-Path $env:APPDATA 'PrismLauncher/libraries' }
+$jdk = if ($env:JAVA_HOME) { $env:JAVA_HOME } else { 'C:\Program Files\Java\jdk-21.0.10' }
 $out = Join-Path $root 'build'
 $classes = Join-Path $out 'classes'
 
@@ -32,6 +41,7 @@ $required = @(
     "$lib\com\google\code\gson\gson\2.10.1\gson-2.10.1.jar",
     "$lib\com\mojang\brigadier\1.3.10\brigadier-1.3.10.jar",
     "$lib\com\mojang\datafixerupper\8.0.16\datafixerupper-8.0.16.jar",
+    "$lib\org\apache\maven\maven-artifact\3.8.5\maven-artifact-3.8.5.jar",
     "$lib\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar"
 )
 

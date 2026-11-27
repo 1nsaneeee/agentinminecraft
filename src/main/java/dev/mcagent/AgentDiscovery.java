@@ -23,24 +23,26 @@ import java.nio.file.Path;
  */
 public final class AgentDiscovery {
 
-    private static final Path DIR = Path.of(System.getProperty("user.home"), ".mcagent");
-    private static final Path POINTER = DIR.resolve("active.json");
-
     private AgentDiscovery() {}
+
+    private static Path pointer() {
+        return Path.of(System.getProperty("user.home"), ".mcagent", "active.json");
+    }
 
     /** Called when a world is loaded: advertise this instance's config. */
     public static void publish() {
         try {
-            Files.createDirectories(DIR);
+            Path target = pointer();
+            Files.createDirectories(target.getParent());
             String json = "{\n"
                     + "  \"configPath\": " + quote(AgentConfig.path()) + ",\n"
                     + "  \"port\": " + AgentConfig.get().port + ",\n"
                     + "  \"version\": " + quote(McAgent.VERSION) + ",\n"
                     + "  \"updatedAt\": " + System.currentTimeMillis() + "\n"
                     + "}\n";
-            Files.writeString(POINTER, json, StandardCharsets.UTF_8);
-            McAgent.LOG.info("[mcagent] advertised this instance at {}", POINTER);
-        } catch (Throwable t) {
+            Files.writeString(target, json, StandardCharsets.UTF_8);
+            McAgent.LOG.info("[mcagent] advertised this instance at {}", target);
+        } catch (java.io.IOException | RuntimeException t) {
             // Discovery is a convenience; failing it must never stop a world from loading.
             McAgent.LOG.warn("[mcagent] could not write the discovery pointer", t);
         }
@@ -49,9 +51,9 @@ public final class AgentDiscovery {
     /** Called when the server stops: withdraw the pointer so nothing follows a dead instance. */
     public static void withdraw() {
         try {
-            Files.deleteIfExists(POINTER);
+            Files.deleteIfExists(pointer());
             McAgent.LOG.info("[mcagent] withdrew the discovery pointer");
-        } catch (Throwable t) {
+        } catch (java.io.IOException | RuntimeException t) {
             McAgent.LOG.warn("[mcagent] could not remove the discovery pointer", t);
         }
     }

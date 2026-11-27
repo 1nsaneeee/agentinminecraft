@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Watches block entities and pushes a WebSocket event when their NBT changes.
+ * Watches block entities and records the latest change when their NBT changes.
  *
  * <p>This is the difference between "poll the machine every few seconds and hope
  * you catch the error" and "get told the moment the state machine moves". The
@@ -26,6 +26,7 @@ public final class Watchers {
         final String label;
         final long expireTick;
         String lastKey;
+        JsonObject latest;
         long lastChangeTick;
 
         Watch(ServerLevel level, BlockPos pos, String label, long expireTick, String lastKey, long lastChangeTick) {
@@ -54,7 +55,8 @@ public final class Watchers {
     public static synchronized List<String> describe() {
         List<String> out = new ArrayList<>();
         for (Watch w : ACTIVE) {
-            out.add(w.label + " @ " + fmt(w.pos) + " (" + w.level.dimension().location() + ")");
+            out.add(w.label + " @ " + fmt(w.pos) + " (" + w.level.dimension().location() + ")"
+                    + (w.latest == null ? " (no observed change)" : " " + w.latest));
         }
         return out;
     }
@@ -90,7 +92,7 @@ public final class Watchers {
             data.addProperty("removed", !w.label.isEmpty() && w.level.getBlockEntity(w.pos) == null);
             data.addProperty("before", shorten(previous));
             data.addProperty("after", shorten(now));
-            McAgent.WS.pushTopic("blocks", "watcher", data);
+            w.latest = data;
         }
     }
 

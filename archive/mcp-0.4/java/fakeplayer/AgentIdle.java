@@ -50,6 +50,10 @@ public final class AgentIdle {
     /** Called once per server tick, after movement has had its say. */
     public static void tick(MinecraftServer server) {
         for (ServerPlayer player : FakePlayers.all()) {
+            if (dev.mcagent.CompanionRuntime.blocked(player)) {
+                cancel(player);
+                continue;
+            }
             if (player.level().getServer() != server) {
                 continue;
             }
@@ -149,6 +153,11 @@ public final class AgentIdle {
         if (state.ticksLeft == 0) {
             release(player);
         }
+    }
+
+    public static void cancel(ServerPlayer player) {
+        STATES.remove(player.getUUID());
+        release(player);
     }
 
     private static void release(ServerPlayer player) {

@@ -4,3 +4,8 @@
 # Binary assets keep their bytes.
 *.jar binary
 *.png binary
+
+# The verified RC ZIP contains these three Windows installation documents with CRLF.
+tools/release/README.md.in text eol=crlf
+docs/AI-INSTALL.md text eol=crlf
+docs/MCP.md text eol=crlf

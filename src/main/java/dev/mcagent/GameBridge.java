@@ -6,9 +6,7 @@ import dev.mcagent.fakeplayer.FakePlayers;
 import dev.mcagent.util.TpsTracker;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -30,14 +28,33 @@ import java.util.Locale;
  */
 public final class GameBridge {
     private static volatile MinecraftServer server;
+    private static String worldSessionId;
+    private static final ThreadLocal<Boolean> BRIDGE_COMMAND = new ThreadLocal<>();
 
     private GameBridge() {}
 
     public static void attach(MinecraftServer s) {
         server = s;
+        worldSessionId = java.util.UUID.randomUUID().toString();
+        AgentControl.attach();
+        PlayerSelections.clear();
+        BlockObservations.clear();
+        EditPlans.clear();
+        EditJobs.attach();
+        UndoJobs.clear();
+        ActionJournal.clear();
     }
 
     public static void detach() {
+        AgentControl.detach();
+        PlayerSelections.clear();
+        BlockObservations.clear();
+        UndoJobs.stopAll("world_detached");
+        UndoJobs.clear();
+        EditJobs.detach();
+        ActionJournal.clear();
+        EditPlans.clear();
+        worldSessionId = null;
         server = null;
     }
 
@@ -73,14 +90,26 @@ public final class GameBridge {
         return server != null;
     }
 
+    public static String worldSessionId() { server(); return worldSessionId; }
+    public static boolean bridgeCommand() { return Boolean.TRUE.equals(BRIDGE_COMMAND.get()); }
+
     /** Runs {@code task} on the server thread and waits for the result. */
     public static <T> T onServer(java.util.function.Supplier<T> task, long timeoutMs) {
         MinecraftServer s = server();
-        if (s.isSameThread()) return task.get();
+        Long acceptedTransport = AgentControl.transportGeneration();
+        if (s.isSameThread()) {
+            AgentControl.requireTransport(acceptedTransport);
+            return task.get();
+        }
         java.util.concurrent.CompletableFuture<T> future = new java.util.concurrent.CompletableFuture<>();
+        java.util.concurrent.atomic.AtomicInteger phase = new java.util.concurrent.atomic.AtomicInteger(); // queued=0, started=1, cancelled=2
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         s.execute(() -> {
             try {
+                if (System.nanoTime() >= deadline) throw new IllegalStateException("server task expired before execution");
+                if (!phase.compareAndSet(0, 1)) return;
                 if (server != s) throw new IllegalStateException("the world changed before the task could run");
+                AgentControl.requireTransport(acceptedTransport);
                 future.complete(task.get());
             } catch (Throwable t) {
                 future.completeExceptionally(t);
@@ -89,8 +118,12 @@ public final class GameBridge {
         try {
             return future.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
-            throw new IllegalStateException("server thread did not respond within " + timeoutMs + "ms");
+            boolean cancelledBeforeStart = phase.compareAndSet(0, 2);
+            if (cancelledBeforeStart) future.cancel(false);
+            throw new IllegalStateException(cancelledBeforeStart ? "server task timed out before execution"
+                    : "server task already started but timed out; inspect actual outcome before retrying");
         } catch (InterruptedException e) {
+            if (phase.compareAndSet(0, 2)) future.cancel(false);
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while waiting for the server thread");
         } catch (java.util.concurrent.ExecutionException e) {
@@ -123,8 +156,23 @@ public final class GameBridge {
 
     /** Uses the same level for a world edit and its undo snapshot. */
     public static String runCommand(String command, String playerName, int permission, ServerLevel targetLevel) {
+        return dispatchCommand(command, playerName, permission, targetLevel, null);
+    }
+
+    /** Command callback evidence for edit tools; preserves the legacy text-only command API. */
+    public static JsonObject runCommandResult(String command, String playerName, int permission, ServerLevel targetLevel) {
+        CommandReceipt receipt = new CommandReceipt(Math.max(1, AgentConfig.get().maxOutputChars));
+        dispatchCommand(command, playerName, permission, targetLevel, receipt);
+        return receipt.toJson();
+    }
+
+    private static String dispatchCommand(String command, String playerName, int permission, ServerLevel targetLevel,
+                                          CommandReceipt receipt) {
+        String acceptedEpoch = AgentControl.epoch();
         return onServer(() -> {
-            // Recheck on the game thread, including commands received through WebSocket.
+            AgentControl.requireActive(acceptedEpoch);
+            ExternalTasks.requireCurrent();
+            // Recheck on the game thread, before dispatch.
             if (AgentMode.isChat()) throw new IllegalStateException("chat mode does not run commands; use /agent work first");
             if (targetLevel != null && server().getLevel(targetLevel.dimension()) != targetLevel) {
                 throw new IllegalStateException("command level belongs to an inactive world");
@@ -134,7 +182,7 @@ public final class GameBridge {
             CommandSourceStack base = player.createCommandSourceStack();
             ServerLevel level = targetLevel == null ? base.getLevel() : targetLevel;
             List<String> lines = new ArrayList<>();
-            CommandSource sink = new CaptureSource(lines, level);
+            CommandSource sink = new CaptureSource(lines, receipt);
             CommandSourceStack stack = new CommandSourceStack(
                     sink,
                     base.getPosition(),
@@ -145,7 +193,17 @@ public final class GameBridge {
                     base.getDisplayName(),
                     base.getServer(),
                     base.getEntity());
-            server().getCommands().performPrefixedCommand(stack, cleaned);
+            if (receipt != null) {
+                JsonObject syntax = CommandKnowledge.inspect(server().getCommands().getDispatcher(), stack, cleaned);
+                if (!Json.b(syntax, "syntaxComplete", false)) {
+                    receipt.rejectBeforeDispatch(syntax.toString());
+                    return "";
+                }
+            }
+            boolean nestedBridgeCommand = bridgeCommand();
+            BRIDGE_COMMAND.set(true);
+            try { server().getCommands().performPrefixedCommand(receipt == null ? stack : stack.withCallback(receipt::result), cleaned); }
+            finally { if (nestedBridgeCommand) BRIDGE_COMMAND.set(true); else BRIDGE_COMMAND.remove(); }
             if (lines.isEmpty()) return "";
             String joined = String.join("\n", lines);
             int max = AgentConfig.get().maxOutputChars;
@@ -155,16 +213,17 @@ public final class GameBridge {
 
     private static final class CaptureSource implements CommandSource {
         private final List<String> lines;
-        private final ServerLevel level;
+        private final CommandReceipt receipt;
 
-        CaptureSource(List<String> lines, ServerLevel level) {
+        CaptureSource(List<String> lines, CommandReceipt receipt) {
             this.lines = lines;
-            this.level = level;
+            this.receipt = receipt;
         }
 
         @Override
         public void sendSystemMessage(Component message) {
-            lines.add(message.getString());
+            if (receipt == null) lines.add(message.getString());
+            else receipt.message(message.getString());
         }
 
         @Override
@@ -181,105 +240,6 @@ public final class GameBridge {
         public boolean shouldInformAdmins() {
             return false;
         }
-    }
-
-    // ------------------------------------------------------------------- chat
-
-    /**
-     * Speaks through the agent's own player body, so vanilla renders the
-     * {@code <name> } prefix from the sender's profile instead of this mod
-     * faking one.
-     *
-     * <p>Falls back to the old system line when no agent body is in the world:
-     * {@code mc_chat} has to keep working even with nothing spawned.</p>
-     */
-    public static void say(String text) {
-        if (text == null || text.isBlank()) return;
-        String speaker = AgentConfig.get().resolvedPlayerName();
-        onServer(() -> {
-            ServerPlayer self = agentPlayer(speaker);
-            if (self == null) {
-                Component line = formatAgentLine(text);
-                for (ServerPlayer p : server().getPlayerList().getPlayers()) {
-                    p.sendSystemMessage(line);
-                }
-                return null;
-            }
-            broadcastAsChat(self, text);
-            return null;
-        }, 10000);
-        McAgent.WS.pushChat(speaker, text, true);
-    }
-
-    /**
-     * Same as {@link #say} but takes a JSON text component, so the harness can send
-     * things that are clickable. Used by the session list: each entry is a run_command
-     * click, which is how Minecraft expects "pick one of these" to work.
-     */
-    public static void sayComponent(com.google.gson.JsonObject json) {
-        if (json == null) return;
-        onServer(() -> {
-            net.minecraft.network.chat.Component line;
-            try {
-                line = net.minecraft.network.chat.Component.Serializer.fromJson(json, server().registryAccess());
-            } catch (Exception e) {
-                McAgent.LOG.warn("[mcagent] rejected an invalid say_json component", e);
-                return null;
-            }
-            if (line == null) return null;
-            for (ServerPlayer p : server().getPlayerList().getPlayers()) {
-                p.sendSystemMessage(line);
-            }
-            return null;
-        }, 10000);
-    }
-
-    public static void tell(String playerName, String text) {
-        Component line = formatAgentLine(text);
-        onServer(() -> {
-            player(playerName).sendSystemMessage(line);
-            return null;
-        }, 10000);
-        McAgent.WS.pushChat(AgentConfig.get().resolvedPlayerName(), text, true);
-    }
-
-    /** The agent's own body: the configured name if spawned, else any body. */
-    private static ServerPlayer agentPlayer(String preferred) {
-        List<String> names = FakePlayers.names();
-        if (names.isEmpty()) return null;
-        for (String n : names) {
-            if (n.equalsIgnoreCase(preferred)) return FakePlayers.byName(n);
-        }
-        return FakePlayers.byName(names.get(0));
-    }
-
-    /**
-     * Broadcasts a genuine player chat message from an agent body.
-     *
-     * <p>Unsigned on purpose: a real client signs with the chat session it
-     * negotiated at login, which a {@link dev.mcagent.fakeplayer.FakeConnection}
-     * never has. Clients still render unsigned messages - they only lose the
-     * "message verified" hover marker.</p>
-     *
-     * <p>NeoForge may run {@code ServerChatEvent} for this broadcast. The listener
-     * skips agent-owned senders, otherwise the line would land in {@link ChatLog}
-     * and {@code mc_wait --untilChat} would match the agent's own sentence.</p>
-     */
-    private static void broadcastAsChat(ServerPlayer self, String text) {
-        PlayerChatMessage message = PlayerChatMessage.unsigned(self.getUUID(), text);
-        server().getPlayerList().broadcastChatMessage(
-                message, self, ChatType.bind(ChatType.CHAT, self));
-    }
-
-    /**
-     * Fakes a {@code <name> text} line. Only reached by {@link #tell} (a real
-     * player chat message cannot be addressed to one player) and by {@link #say}
-     * when no agent body is spawned.
-     */
-    private static Component formatAgentLine(String text) {
-        return Component.literal("<" + AgentConfig.get().speakName() + "> ")
-                .withStyle(net.minecraft.ChatFormatting.AQUA)
-                .append(Component.literal(text));
     }
 
     // ------------------------------------------------------------------ state
@@ -314,15 +274,20 @@ public final class GameBridge {
         o.addProperty("dist", dev.mcagent.util.Dist2.string());
         o.addProperty("running", true);
         o.addProperty("version", s.getServerVersion());
+        o.add("agentControl", AgentControl.snapshot());
         o.addProperty("tick", s.getTickCount());
         o.addProperty("playerCount", s.getPlayerCount());
         o.addProperty("tpsEstimate", TpsTracker.tps());
         o.addProperty("world", String.valueOf(s.overworld().dimension().location()));
+        o.addProperty("worldSessionId", worldSessionId);
+        o.addProperty("saveFolder", s.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).normalize().getFileName().toString());
         JsonArray players = Json.arr();
         for (ServerPlayer p : s.getPlayerList().getPlayers()) {
             JsonObject po = Json.obj();
             po.addProperty("name", p.getGameProfile().getName());
             po.addProperty("uuid", p.getUUID().toString());
+            JsonObject selection = PlayerSelections.current(p);
+            if (selection != null) po.add("selection", selection);
             po.addProperty("dim", p.level().dimension().location().toString());
             po.addProperty("x", round(p.getX()));
             po.addProperty("y", round(p.getY()));

@@ -53,19 +53,25 @@ public final class Tools {
     private Tools() {}
 
     public static void registerAll(ToolRegistry registry) {
+        AgentControl.register(registry);
         registerStatus(registry);
         registerCommand(registry);
-        registerChat(registry);
         registerWorld(registry);
+        PlayerSelections.register(registry);
         registerPlayers(registry);
         registerAgentPlayers(registry);
         registerMovement(registry);
         registerActions(registry);
         registerDiag(registry);
         registerEditing(registry);
+        EditPlans.register(registry);
+        EditJobs.register(registry);
+        UndoJobs.register(registry);
         registerWatches(registry);
         registerRecipes(registry);
         registerQuests(registry);
+        KnowledgeTools.register(registry);
+        BlockObservations.register(registry);
     }
 
     private static void reg(ToolRegistry registry, String name, String desc, JsonObject schema, Body body) {
@@ -97,7 +103,7 @@ public final class Tools {
     private static void registerStatus(ToolRegistry registry) {
         reg(registry, "mc_status",
                 "Live state of the game: whether a server is running, tick, TPS estimate, world, "
-                        + "and every online player with position/dimension/health. Also client window info when available.",
+                        + "and online players with position, dimension, health and any explicit selection. Also client window info when available.",
                 ToolRegistry.schema(),
                 args -> {
                     JsonObject snap = GameBridge.snapshot();
@@ -113,10 +119,8 @@ public final class Tools {
                     bridge.addProperty("mod", McAgent.VERSION);
                     bridge.addProperty("port", McAgent.port());
                     bridge.addProperty("dist", Dist2.string());
-                    bridge.addProperty("wsClients", McAgent.WS.size());
                     bridge.addProperty("allowCommands", AgentConfig.get().allowCommands);
                     bridge.addProperty("allowWrite", AgentConfig.get().allowWrite);
-                    bridge.addProperty("mode", AgentMode.id());
                     snap.add("bridge", bridge);
                     return McpResult.text(Json.GSON.toJson(snap));
                 });
@@ -148,48 +152,6 @@ public final class Tools {
                     int permission = Json.i(args, "permission", -1);
                     String out = GameBridge.runCommand(command, Json.str(args, "player", null), permission);
                     return McpResult.text(out.isEmpty() ? "(no output)" : out);
-                });
-    }
-
-    // -------------------------------------------------------------------- chat
-
-    private static void registerChat(ToolRegistry registry) {
-        JsonObject say = ToolRegistry.schema("text");
-        ToolRegistry.strProp(say, "text", "Line to print into the player's chat.");
-        ToolRegistry.strProp(say, "player", "Send only to this player; omitted means every online player.");
-        reg(registry, "mc_chat",
-                "Print a line into the game chat, addressed to the player you are collaborating with.",
-                say,
-                args -> {
-                    String text = Json.str(args, "text", "");
-                    if (text.isEmpty()) return McpResult.error("text is required");
-                    String player = Json.str(args, "player", null);
-                    if (player == null || player.isBlank()) {
-                        GameBridge.say(text);
-                    } else {
-                        GameBridge.tell(player, text);
-                    }
-                    return McpResult.text("sent: " + text);
-                });
-
-        JsonObject read = ToolRegistry.schema();
-        ToolRegistry.intProp(read, "count", "How many recent lines to return (default 20).");
-        ToolRegistry.strProp(read, "filter", "Optional case-insensitive regex on the message text.");
-        reg(registry, "mc_chat_read",
-                "Read what the player has typed recently. Combined with mc_wait this replaces log tailing.",
-                read,
-                args -> {
-                    int count = Math.max(1, Math.min(200, Json.i(args, "count", 20)));
-                    List<ChatLog.Line> lines = ChatLog.tail(count, Json.str(args, "filter", null));
-                    if (lines.isEmpty()) return McpResult.text("(no chat lines)");
-                    StringBuilder sb = new StringBuilder();
-                    for (ChatLog.Line l : lines) {
-                        sb.append(l.system() ? "[system] " : "<" + l.player() + "> ").append(l.text()).append('\n');
-                    }
-                    JsonObject meta = Json.obj();
-                    meta.addProperty("lastSeq", ChatLog.lastSeq());
-                    sb.append("\nlastSeq=").append(ChatLog.lastSeq());
-                    return McpResult.text(sb.toString());
                 });
     }
 
@@ -366,22 +328,34 @@ public final class Tools {
         ToolRegistry.intProp(setBlock, "y", "Block Y");
         ToolRegistry.intProp(setBlock, "z", "Block Z");
         ToolRegistry.strProp(setBlock, "block", "Block id with optional state, e.g. minecraft:oak_log[axis=x]");
+        ToolRegistry.strProp(setBlock, "dimension", "Dimension id; defaults to the player's. Must already be loaded.");
         reg(registry, "mc_set_block",
-                "Place a block via /setblock. Requires allowWrite=true in config/mcagent.json.",
+                "Place a block via /setblock and record actual changes for mc_undo, including previous block entity contents. Requires allowWrite=true.",
                 setBlock,
-                args -> {
+                args -> GameBridge.onServer(() -> {
                     if (AgentMode.isChat()) {
                         return McpResult.error("chat mode does not edit the world directly - "
                                 + "use the agent player's own hands, or /agent work first");
                     }
                     if (!AgentConfig.get().allowWrite) {
-                        return McpResult.error("world writes are disabled; set allowWrite=true in config/mcagent.json");
+                        return McpResult.error("world writes are disabled; set allowWrite=true in config/agentinminecraft.json");
                     }
+                    ServerLevel level = level(Json.str(args, "dimension", null));
+                    BlockPos position = pos(args);
+                    if (EditJobs.active()) return McpResult.error("an edit job is active; wait or cancel it before another managed edit");
+                    requireLoaded(level, position);
+                    String blockSpec = Json.str(args, "block", "").trim();
+                    if (blockSpec.isEmpty()) return McpResult.error("block is required");
+                    List<EditHistory.Cell> before = new ArrayList<>();
+                    EditHistory.capture(level, List.of(position), "setblock", before);
                     String cmd = String.format(Locale.ROOT, "setblock %d %d %d %s",
-                            Json.i(args, "x", 0), Json.i(args, "y", 0), Json.i(args, "z", 0),
-                            Json.str(args, "block", "minecraft:air"));
-                    return McpResult.text(GameBridge.runCommand(cmd, null, 4));
-                });
+                            position.getX(), position.getY(), position.getZ(), blockSpec);
+                    JsonObject receipt;
+                    int changed;
+                    try { receipt = GameBridge.runCommandResult(cmd, null, 4, level); }
+                    finally { changed = EditHistory.pushChanged("setblock " + blockSpec + " @ " + position.toShortString(), level, before); }
+                    return editResult(receipt, changed);
+                }, 30000));
     }
 
     // ----------------------------------------------------------------- players
@@ -463,57 +437,26 @@ public final class Tools {
                     return McpResult.text(String.join("\n", tail));
                 });
 
-        JsonObject wait = ToolRegistry.schema();
-        ToolRegistry.intProp(wait, "ticks", "Wait for this many ticks to elapse (0 = ignore).");
-        ToolRegistry.strProp(wait, "untilChat", "Wait until a chat line matches this regex.");
-        ToolRegistry.intProp(wait, "timeoutMs", "Give up after this many milliseconds (default 20000).");
-        reg(registry, "mc_wait",
-                "Block until N ticks pass and/or the player says something matching a regex. "
-                        + "Returns what happened, so you can stay in sync with the game instead of polling.",
-                wait,
-                args -> {
-                    int ticks = Math.max(0, Json.i(args, "ticks", 0));
-                    String untilChat = Json.str(args, "untilChat", null);
-                    long timeoutMs = Math.max(500, Math.min(120000, Json.i(args, "timeoutMs", 20000)));
-                    if (ticks == 0 && (untilChat == null || untilChat.isBlank())) {
-                        return McpResult.error("give either ticks or untilChat");
-                    }
-                    Pattern pattern = untilChat == null || untilChat.isBlank()
-                            ? null : Pattern.compile(untilChat, Pattern.CASE_INSENSITIVE);
-                    long deadline = System.currentTimeMillis() + timeoutMs;
-                    long seq = ChatLog.lastSeq();
-                    int startTick = GameBridge.running() ? GameBridge.server().getTickCount() : 0;
-                    while (System.currentTimeMillis() < deadline) {
-                        if (pattern != null) {
-                            List<ChatLog.Line> fresh = ChatLog.since(seq, 50);
-                            for (ChatLog.Line line : fresh) {
-                                if (pattern.matcher(line.text()).find()) {
-                                    JsonObject hit = Json.obj();
-                                    hit.addProperty("reason", "chat");
-                                    hit.addProperty("player", line.player());
-                                    hit.addProperty("text", line.text());
-                                    hit.addProperty("ticks", GameBridge.running()
-                                            ? GameBridge.server().getTickCount() - startTick : -1);
-                                    return McpResult.text(Json.GSON.toJson(hit));
-                                }
-                            }
-                        } else {
-                            int elapsed = GameBridge.running() ? GameBridge.server().getTickCount() - startTick : 0;
-                            if (elapsed >= ticks) {
-                                JsonObject ok = Json.obj();
-                                ok.addProperty("reason", "ticks");
-                                ok.addProperty("ticks", elapsed);
-                                return McpResult.text(Json.GSON.toJson(ok));
-                            }
-                        }
-                        Thread.sleep(25);
-                    }
-                    JsonObject done = Json.obj();
-                    done.addProperty("reason", "timeout");
-                    done.addProperty("ticks", GameBridge.running()
-                            ? GameBridge.server().getTickCount() - startTick : -1);
-                    return McpResult.text(Json.GSON.toJson(done));
-                });
+        JsonObject wait = ToolRegistry.schema("ticks");
+        ToolRegistry.intProp(wait, "ticks", "Number of server ticks to wait.");
+        ToolRegistry.intProp(wait, "timeoutMs", "Maximum wait in milliseconds (default 20000).");
+        reg(registry, "mc_wait", "Wait for game ticks and report elapsed ticks or timeout.", wait, args -> {
+            int ticks = Json.i(args, "ticks", 0);
+            if (ticks <= 0) return McpResult.error("ticks must be positive");
+            long timeout = Math.max(500, Math.min(120000, Json.i(args, "timeoutMs", 20000)));
+            var server = GameBridge.server();
+            int start = server.getTickCount();
+            long deadline = System.nanoTime() + timeout * 1_000_000L;
+            int elapsed;
+            while ((elapsed = server.getTickCount() - start) < ticks && System.nanoTime() < deadline) {
+                if (!GameBridge.running() || server != GameBridge.server()) return McpResult.error("world changed");
+                Thread.sleep(25);
+            }
+            JsonObject result = Json.obj();
+            result.addProperty("reason", elapsed >= ticks ? "ticks" : "timeout");
+            result.addProperty("ticks", elapsed);
+            return McpResult.text(result.toString());
+        });
     }
 
     // ----------------------------------------------------------------- editing
@@ -540,7 +483,7 @@ public final class Tools {
                                 + "use the agent player's own hands, or /agent work first");
                     }
                     if (!AgentConfig.get().allowWrite) {
-                        return McpResult.error("world writes are disabled; set allowWrite=true in config/mcagent.json");
+                        return McpResult.error("world writes are disabled; set allowWrite=true in config/agentinminecraft.json");
                     }
                     BlockPos a = pos(args, "x1", "y1", "z1");
                     BlockPos b = pos(args, "x2", "y2", "z2");
@@ -549,6 +492,9 @@ public final class Tools {
                     String mode = Json.str(args, "mode", "replace");
                     String dim = Json.str(args, "dimension", null);
                     return GameBridge.onServer(() -> {
+                        if (AgentMode.isChat() || !AgentConfig.get().allowWrite)
+                            return McpResult.error("world edit authorization changed before execution");
+                        if (EditJobs.active()) return McpResult.error("an edit job is active; wait or cancel it before another managed edit");
                         ServerLevel level = level(dim);
                         int minX = Math.min(a.getX(), b.getX());
                         int minY = Math.min(a.getY(), b.getY());
@@ -569,43 +515,57 @@ public final class Tools {
                             }
                         }
                         List<EditHistory.Cell> cells = new ArrayList<>();
+                        requireLoaded(level, positions.toArray(BlockPos[]::new));
                         EditHistory.capture(level, positions, "fill", cells);
                         String cmd = String.format(Locale.ROOT, "fill %d %d %d %d %d %d %s %s",
                                 minX, minY, minZ, maxX, maxY, maxZ, block, mode);
-                        String out = GameBridge.runCommand(cmd, null, 4, level);
-                        EditHistory.push("fill " + block + " @ " + minX + "," + minY + "," + minZ, level, cells);
-                        return McpResult.text(out + "\n[" + positions.size() + " cells recorded, "
-                                + EditHistory.size() + " operations in undo history]");
+                        JsonObject receipt;
+                        int changed;
+                        try { receipt = GameBridge.runCommandResult(cmd, null, 4, level); }
+                        finally { changed = EditHistory.pushChanged("fill " + block + " @ " + minX + "," + minY + "," + minZ, level, cells); }
+                        return editResult(receipt, changed);
                     }, 60000);
                 });
 
         JsonObject undo = ToolRegistry.schema();
         ToolRegistry.intProp(undo, "steps", "How many operations to revert (default 1, max 8).");
         reg(registry, "mc_undo",
-                "Revert the most recent world edits made through mc_fill, restoring block states and "
-                        + "block entity contents. Only agent-made edits are restorable.",
+                "Revert recorded direct edits, applied previews or finished edit jobs, restoring block states and "
+                        + "block entity contents. Rejects later block/NBT changes and retains the conflicted history entry. "
+                        + "Records over 4096 cells use mc_undo_start.",
                 undo,
                 args -> GameBridge.onServer(() -> {
+                    if (EditJobs.active()) return McpResult.error("an edit job is active; wait or cancel it before undo");
                     if (AgentMode.isChat()) {
                         return McpResult.error("chat mode does not edit the world directly; use /agent work first");
                     }
                     if (!AgentConfig.get().allowWrite) {
-                        return McpResult.error("world writes are disabled; set allowWrite=true in config/mcagent.json");
+                        return McpResult.error("world writes are disabled; set allowWrite=true in config/agentinminecraft.json");
                     }
                     int steps = Math.max(1, Math.min(8, Json.i(args, "steps", 1)));
                     List<String> done = new ArrayList<>();
                     for (int i = 0; i < steps; i++) {
-                        String result = EditHistory.undoLast();
+                        EditHistory.UndoResult result = EditHistory.undoLast();
                         if (result == null) break;
-                        done.add(result);
+                        done.add(result.text());
+                        if (result.error()) return McpResult.error(String.join("\n", done)
+                                + "\n[undo stopped; " + i + " earlier operations completed in this request]");
                     }
                     return McpResult.text(done.isEmpty() ? "nothing to undo" : String.join("\n", done));
                 }, 60000));
 
         reg(registry, "mc_history",
-                "List undoable world edits, newest first.",
+                "List recorded world edits, newest first. Later block/NBT changes may prevent undo.",
                 ToolRegistry.schema(),
                 args -> McpResult.text(EditHistory.size() == 0 ? "(undo history empty)" : String.join("\n", EditHistory.describe())));
+    }
+
+    private static McpResult editResult(JsonObject receipt, int changed) {
+        McpResult result = McpResult.text(Json.str(receipt, "output", "") + "\n[" + changed
+                + " cells recorded, " + EditHistory.size() + " operations in undo history]"
+                + "\n[command outcome=" + Json.str(receipt, "outcome", "outcome_unknown")
+                + "; verify actual blocks before reporting completion]");
+        return !Json.b(receipt, "dispatched", false) || receipt.get("failedCallbacks").getAsLong() > 0 ? result.asError() : result;
     }
 
     // ------------------------------------------------------------------ watches
@@ -620,8 +580,8 @@ public final class Tools {
         ToolRegistry.strProp(watch, "dimension", "Dimension id; defaults to the player's.");
 
         reg(registry, "mc_watch",
-                "Watch a block entity and push a WebSocket event whenever its NBT changes - machine "
-                        + "progress, status, contents. The WS client must subscribe to the 'blocks' topic. "
+                "Watch a block entity for changes to its NBT. "
+                        + "Read its latest detected change with mc_watch_list. "
                         + "The payload includes before/after digests and the machine's 'status' field.",
                 watch,
                 args -> GameBridge.onServer(() -> {
@@ -632,7 +592,7 @@ public final class Tools {
                     }
                     int seconds = Math.max(5, Math.min(3600, Json.i(args, "seconds", 300)));
                     String msg = Watchers.add(level, pos, Json.str(args, "label", "watch"), seconds);
-                    return McpResult.text(msg + "\n(WS clients must sub to 'blocks' to receive the events)");
+                    return McpResult.text(msg);
                 }, 15000));
 
         reg(registry, "mc_watch_list",
@@ -948,7 +908,7 @@ public final class Tools {
     private static void registerAgentPlayers(ToolRegistry registry) {
         JsonObject spawn = ToolRegistry.schema();
         ToolRegistry.strProp(spawn, "name",
-                "Ignored: the name comes from playerName in config/mcagent.json.");
+                "Ignored: the name comes from playerName in config/agentinminecraft.json.");
         ToolRegistry.numProp(spawn, "x", "Spawn X; defaults to the first real player's position.",
                 -30000000, 30000000);
         ToolRegistry.numProp(spawn, "y", "Spawn Y; defaults to the first real player's position.", -64, 320);
@@ -1022,6 +982,10 @@ public final class Tools {
                         o.addProperty("selected", p.getInventory().selected);
                         o.addProperty("holding", p.getMainHandItem().getItem().toString());
                         o.addProperty("walking", AgentMovement.isWalking(p));
+                        o.addProperty("following", AgentFollow.isFollowing(p));
+                        o.addProperty("mining", AgentActions.isBreaking(p));
+                        o.addProperty("usingItem", p.isUsingItem());
+                        o.addProperty("actionId", AgentMovement.actionId(p));
                         out.add(o);
                     }
                     return McpResult.text(Json.GSON.toJson(out));
@@ -1033,7 +997,7 @@ public final class Tools {
         ToolRegistry.numProp(move, "y", "Target Y.", -64, 320);
         ToolRegistry.numProp(move, "z", "Target Z.", -30000000, 30000000);
         reg(registry, "mc_player_teleport",
-                "Teleport an agent player (dev/build tool; refused in chat mode - use mc_player_walk).",
+                "Teleport an engineering player with allowWrite=true.",
                 move,
                 args -> GameBridge.onServer(() -> {
                     // Teleport is a build tool, not a way to move around. In chat mode the
@@ -1124,10 +1088,12 @@ public final class Tools {
                             Json.d(args, "x", p.getX()),
                             Json.d(args, "y", p.getY()),
                             Json.d(args, "z", p.getZ()));
+                    AgentFollow.stop(p);
                     AgentMovement.start(p, target, Json.b(args, "sprint", false),
                             GameBridge.server().getTickCount());
                     return McpResult.text("walking to " + target.x + ", " + target.y + ", " + target.z
-                            + " (" + AgentMovement.planSummary(p) + ")");
+                            + " (" + AgentMovement.planSummary(p) + ")")
+                            .addText("actionId=" + AgentMovement.actionId(p) + "; accepted, not yet arrived; query mc_action_status");
                 }, 15000));
 
         JsonObject halt = ToolRegistry.schema("name");
@@ -1141,7 +1107,8 @@ public final class Tools {
                     if (p == null) {
                         return McpResult.error("no such agent player");
                     }
-                    boolean was = AgentMovement.stop(p);
+                    boolean wasFollowing = AgentFollow.stop(p);
+                    boolean was = AgentMovement.stop(p) || wasFollowing;
                     return McpResult.text(was ? "stopped" : "was not walking");
                 }, 15000));
 
